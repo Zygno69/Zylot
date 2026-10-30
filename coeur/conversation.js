@@ -88,6 +88,15 @@ async function preparerAtelier(p, c) {
   for (const dep of ['node_modules', 'vendor']) {
     if (fs.existsSync(path.join(p.dossier, dep)) && !fs.existsSync(path.join(chemin, dep))) fs.symlinkSync(path.join(p.dossier, dep), path.join(chemin, dep));
   }
+  // Projet en CI/CD : la mise en ligne, c'est GitHub Actions, déclenché par l'envoi sur main.
+  if (p.ci === 'github') {
+    const pu = await pousserVraiment(p);
+    if (pu.erreur) return pu;
+    const cg = lireConv(p.id); cg.demandeProd = null; cg.questionProd = null; cg.fichiersADeployer = [];
+    systeme(cg, 'Envoyé sur GitHub : la mise en ligne est faite par GitHub Actions (vérification, envoi, contrôle du site).'); ecrireConv(p.id, cg);
+    S.journal(p.nom, 'envoyé sur GitHub, mise en ligne par GitHub Actions');
+    return { ok: true, message: avant + 'Envoyé sur GitHub. GitHub Actions vérifie le code, met en ligne les fichiers changés et contrôle le site (2 à 3 minutes). Vérifie ensuite toi-même le site avec curl.' };
+  }
   const nc = await git(p.dossier, ['status', '--porcelain']);
   const n = nc.out ? nc.out.split('\n').length : 0;
   c.atelier = { chemin, branche, depart: head.out, creeLe: new Date().toISOString() };
@@ -354,7 +363,7 @@ function executer(argv, dossier, delai, reponse = '') {
 const QUESTION = /\[(o|y)\/n\]|\[o\/N\]|\(o\/n\)|EOFError|\?\s*$/i;
 
 async function deployer(p, verifierApres, messageCommit, { confirme = false, reponse = '' } = {}) {
-  if (!p.deploy) return { erreur: `Aucune commande de déploiement n'est configurée pour ${p.nom} dans projets.json (champ « deploy »).` };
+  if (!p.deploy && p.ci !== 'github') return { erreur: `Aucune commande de déploiement n'est configurée pour ${p.nom} dans projets.json (champ « deploy »).` };
   const c = lireConv(p.id);
   const dernier = [...c.messages].reverse().find(m => m.role === 'vous');
   if (!confirme && (!dernier || !DEMANDE_PROD.test(dernier.texte))) {
@@ -379,6 +388,15 @@ async function deployerVraiment(p, verifierApres, messageCommit, reponse) {
   // Si la modification de Claude n'a pas pu entrer dans le projet, on ne met surtout pas en ligne l'ancienne version.
   if (!g.ok) return { erreur: 'Mise en ligne annulée : ' + g.message };
   if (!/^Rien à garder/.test(g.message)) avant = g.message + '\n';
+  // Projet en CI/CD : la mise en ligne, c'est GitHub Actions, déclenché par l'envoi sur main.
+  if (p.ci === 'github') {
+    const pu = await pousserVraiment(p);
+    if (pu.erreur) return pu;
+    const cg = lireConv(p.id); cg.demandeProd = null; cg.questionProd = null; cg.fichiersADeployer = [];
+    systeme(cg, 'Envoyé sur GitHub : la mise en ligne est faite par GitHub Actions (vérification, envoi, contrôle du site).'); ecrireConv(p.id, cg);
+    S.journal(p.nom, 'envoyé sur GitHub, mise en ligne par GitHub Actions');
+    return { ok: true, message: avant + 'Envoyé sur GitHub. GitHub Actions vérifie le code, met en ligne les fichiers changés et contrôle le site (2 à 3 minutes). Vérifie ensuite toi-même le site avec curl.' };
+  }
   const nc = await git(p.dossier, ['status', '--porcelain']);
   const n = nc.out ? nc.out.split('\n').length : 0;
   // « {fichiers} » dans la commande : seulement les fichiers changés depuis la dernière mise en ligne faite par Zylot.
@@ -487,6 +505,10 @@ async function pousser(p) {
   const c = lireConv(p.id);
   const dernier = [...c.messages].reverse().find(m => m.role === 'vous');
   if (!dernier || !DEMANDE_PUSH.test(dernier.texte)) return { erreur: 'Refusé : le dernier message du propriétaire ne demande pas d\'envoyer sur GitHub. Demande-lui de le dire (« pousse », « envoie sur GitHub »).' };
+  return pousserVraiment(p);
+}
+
+async function pousserVraiment(p) {
   const branche = (await git(p.dossier, ['rev-parse', '--abbrev-ref', 'HEAD'])).out;
   const suivi = await git(p.dossier, ['rev-parse', '--abbrev-ref', '@{u}']);
   const r = suivi.ok ? await git(p.dossier, ['push']) : await git(p.dossier, ['push', '-u', 'origin', branche]);
