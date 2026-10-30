@@ -85,6 +85,31 @@ async function etat() {
   return { projets, alertes, journal: S.lireJournal(40), enCours: S.verrou(), securiteEnCours, maintenant: new Date().toISOString() };
 }
 
+// Ce que Zylot sait d'un projet, en quelques lignes, pour Claude.
+async function contexteProjet(p) {
+  const surv = p.site ? surveillance.resume(p.id) : null, e = surv && surv.etat;
+  const c = securite.derniers()[p.id];
+  const d = (await depots.tous([p]))[p.id] || {};
+  const l = [];
+  l.push(`- Dossier du projet : ${p.dossier}${p.deploy ? ` · mise en prod : ${p.deploy}` : ' · pas de commande de mise en prod configurée'}`);
+  if (p.site) l.push(`- Site ${p.site} : ${e ? (e.ok ? `en ligne (${e.ms} ms)` : 'HORS LIGNE : ' + (e.erreur || 'code ' + e.code)) : 'pas encore testé'}${e && e.cert ? `, certificat valable ${e.cert.jours} jours` : ''}`);
+  if (c) l.push(`- Contrôle de sécurité (${c.quand.slice(0, 10)}) : ${c.points.length ? c.points.map(x => x.titre).join(' ; ') : 'rien à signaler'}`);
+  if (d.git) l.push(`- Git : dernier commit ${d.dernierCommit ? d.dernierCommit.quand.slice(0, 10) + ' « ' + d.dernierCommit.message + ' »' : 'aucun'}, ${d.nonCommites} fichier(s) non commité(s) dans le dossier, ${d.nonPousses == null ? 'pas de suivi GitHub' : d.nonPousses + ' commit(s) non poussé(s)'}`);
+  const al = S.alertesOuvertes().filter(a => a.projet === p.id);
+  if (al.length) l.push(`- Points de l'audit Claude : ${al.map(a => a.titre).join(' ; ')}`);
+  return l.join('\n');
+}
+
+// Après une mise en ligne : le site répond-il, et les contrôles de sécurité sont-ils meilleurs ?
+async function verifierApresMiseEnLigne(p) {
+  if (!p.site) return '';
+  await surveillance.tour(prevenir);
+  const e = surveillance.resume(p.id).etat;
+  const c = await securite.unProjet(p);
+  return `${e && e.ok ? `Le site répond (${e.ms} ms).` : 'ATTENTION : le site ne répond pas (' + ((e && (e.erreur || 'code ' + e.code)) || '?') + ').'}` +
+    (c ? `\nContrôle de sécurité refait : ${c.points.length ? c.points.map(x => x.titre).join(' ; ') : 'plus rien à signaler'}.` : '');
+}
+
 function lancerAudit(ids) {
   const enfant = spawn(process.execPath, [path.join(S.RACINE, 'nuit.js'), ...ids], {
     cwd: S.RACINE, detached: true, stdio: 'ignore', env: process.env,
@@ -102,10 +127,21 @@ http.createServer(async (req, res) => {
     return fs.createReadStream(path.join(S.RACINE, 'interface', 'index.html')).pipe(res);
   }
   if (req.method === 'GET' && url.pathname === '/api/etat') return json(res, 200, await etat());
-  const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter))?$/);
+  const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter|nouvelle))?$/);
   const projetConv = mc && S.projets().find(p => p.id === mc[1]);
   if (mc && !projetConv) return json(res, 404, { erreur: 'Projet inconnu' });
   if (mc && req.method === 'GET' && !mc[2]) return json(res, 200, conversation.etat(projetConv.id));
+
+  // Appels de la commande `zylot`, lancée par Claude pendant une conversation.
+  const ma = url.pathname.match(/^\/api\/agent\/([a-z0-9-]+)\/(garder|deployer|etat)$/);
+  if (ma && req.method === 'POST') {
+    const p = S.projets().find(x => x.id === ma[1]);
+    if (!p || req.headers['x-zylot'] !== '1' || !conversation.jetonValide(p.id, req.headers['x-zylot-jeton'])) return json(res, 403, { erreur: 'Refusé : pas de conversation en cours pour ce projet.' });
+    if (ma[2] === 'etat') return json(res, 200, { message: await contexteProjet(p) });
+    const { message } = await corps(req);
+    if (ma[2] === 'garder') return json(res, 200, await conversation.garder(p, message));
+    return json(res, 200, await conversation.deployer(p, () => verifierApresMiseEnLigne(p), message));
+  }
 
   if (req.method === 'POST') {
     // Un en-tête maison : un autre site ne peut pas l'envoyer sans autorisation CORS, que Zylot ne donne jamais.
@@ -127,11 +163,12 @@ http.createServer(async (req, res) => {
       return json(res, 202, { ok: true });
     }
     if (mc && mc[2] === 'message') {
-      const { texte = '', mode = 'discussion' } = await corps(req);
+      const { texte = '' } = await corps(req);
       if (!String(texte).trim()) return json(res, 400, { erreur: 'Message vide' });
-      const r = await conversation.envoyer(projetConv, String(texte).slice(0, 8000), mode === 'travail' ? 'travail' : 'discussion');
+      const r = await conversation.envoyer(projetConv, String(texte).slice(0, 8000), await contexteProjet(projetConv));
       return json(res, r.erreur ? 409 : 202, r);
     }
+    if (mc && mc[2] === 'nouvelle') { const r = await conversation.nouvelle(projetConv); return json(res, r.erreur ? 409 : 200, r); }
     if (mc && mc[2] === 'garder') { const r = await conversation.garder(projetConv); return json(res, r.erreur ? 409 : 200, r); }
     if (mc && mc[2] === 'jeter') { const r = await conversation.jeter(projetConv); return json(res, r.erreur ? 409 : 200, r); }
     if (mc && mc[2] === 'arreter') return json(res, 200, conversation.arreter(projetConv.id));

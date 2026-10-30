@@ -111,6 +111,14 @@ async function tour(prevenir) {
   S.journal('Tous', 'contrôles de sécurité automatiques faits');
 }
 
+async function unProjet(p) {
+  if (!p.site) return null;
+  const tous = S.lire(F, {});
+  tous[p.id] = await controler(p);
+  S.ecrire(F, tous);
+  return tous[p.id];
+}
+
 function derniers() { return S.lire(F, {}); }
 
-module.exports = { tour, derniers, note };
+module.exports = { tour, derniers, note, unProjet };

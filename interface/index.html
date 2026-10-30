@@ -151,7 +151,22 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
 .note-intro{background:var(--run-bg);color:var(--ink);border-radius:10px;padding:14px 16px;font-size:13.5px}
 .note-intro b{color:var(--run)}
 
-.conv{display:flex;flex-direction:column;gap:10px}
+.drawer.projet{width:min(820px,100%);padding:0;gap:0;overflow:hidden}
+.dhead{padding:16px 22px 0;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.dhead .close{align-self:auto}
+.dtabs{display:flex;gap:4px;margin-bottom:-1px}
+.dpane{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px}
+.convpane{flex:1;display:flex;flex-direction:column;min-height:0}
+.messages{flex:1;overflow-y:auto;padding:18px 22px}
+.conv{display:flex;flex-direction:column;gap:14px}
+.msg{font-size:14px;line-height:1.55;overflow-wrap:anywhere}
+.msg.vous{align-self:flex-end;max-width:85%;background:var(--accent);color:var(--accent-ink);padding:9px 13px;border-radius:14px 14px 4px 14px;white-space:pre-wrap}
+.msg.claude{display:flex;flex-direction:column;gap:8px;max-width:100%}
+.msg.claude .texte{white-space:pre-wrap}
+.msg.claude .erreur{color:var(--crit)}
+.msg.systeme{align-self:center;color:var(--muted);font-size:12.5px;text-align:center;max-width:90%}
+.activites li.refuse,.activites li.echec{color:var(--warn)}
+.msg code{font-family:var(--f-mono);font-size:12.5px;background:var(--soft);padding:1px 5px;border-radius:4px}
 .bulle{max-width:92%;padding:10px 12px;border-radius:12px;font-size:13.5px;white-space:pre-wrap;overflow-wrap:anywhere}
 .bulle.vous{align-self:flex-end;background:var(--accent);color:var(--accent-ink);border-bottom-right-radius:4px}
 .bulle.claude{align-self:flex-start;background:var(--soft);border-bottom-left-radius:4px}
@@ -166,8 +181,9 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
 .attente i{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite alternate}
 @keyframes pulse{from{opacity:.25}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.attente i{animation:none}}
-.saisie{display:flex;flex-direction:column;gap:8px;position:sticky;bottom:-22px;background:var(--panel);padding:10px 0 4px}
-.saisie textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-height:64px;resize:vertical;width:100%}
+.saisie{display:flex;flex-direction:column;gap:8px;background:var(--panel);padding:12px 22px 16px;border-top:1px solid var(--line)}
+.saisie textarea{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:52px;max-height:200px;resize:vertical;width:100%}
+.saisie textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
 .modif{border:1px solid var(--accent);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--run-bg)}
 .modif ul{margin:0;padding-left:18px;font-family:var(--f-mono);font-size:12px}
 .modif details pre{max-height:340px;overflow:auto}
@@ -448,15 +464,13 @@ function rendrePropositions(P){
 }
 
 // ---------- Détail d'un projet ----------
-function ouvrir(html){ $('#drawer').innerHTML='<button type="button" class="close" data-fermer>Fermer ✕</button>'+html; $('#scrim').hidden=false; $('#drawer .close').focus(); }
+function ouvrir(html, classe=''){ const d=$('#drawer'); d.className='drawer '+classe; d.innerHTML=(classe?'':'<button type="button" class="close" data-fermer>Fermer ✕</button>')+html; $('#scrim').hidden=false; (d.querySelector('#convTexte')||d.querySelector('.close'))?.focus(); }
 function fermer(){ $('#scrim').hidden=true; projetOuvert=null; convVue=''; clearTimeout(convTimer); }
 
-function ouvrirProjet(id){
-  const p = D.projets.find(x=>x.id===id); if(!p) return;
+function ficheProjet(p){
   const l = aRegarder(p), e = p.surveillance?.etat, dep = p.depot;
-  ouvrir(`
-    <div class="row"><span class="dot d-${voyant(p)}"></span><span class="label">${p.notation?'sécurité '+p.notation.lettre+' · ':''}${p.site?esc(p.site):'pas de site suivi'}</span></div>
-    <h2 id="dTitle">${esc(p.nom)}</h2>
+  pointsOuverts = l;
+  return `
     ${l.length ? `<h4>À regarder</h4><div class="liste">${l.map((x,i)=>`<div style="border-left-color:var(--${x.g==='urgent'?'crit':x.g==='securite'?'warn':'line'})"><b>${esc(x.t)}</b> <span class="pill p-${x.g}">${GRAV[x.g]}</span><br><span style="font-size:13px">${esc(x.d)}</span><div class="row" style="margin-top:6px;gap:6px"><button type="button" class="btn small" data-demander="${i}">Demander à Claude</button>${x.alerte?`<button type="button" class="btn small" data-vu="${esc(x.alerte)}">Vu, je m'en occupe</button>`:''}</div></div>`).join('')}</div>` : '<p class="t-vert">Rien à signaler sur ce projet.</p>'}
     <h4>Site</h4>
     <dl class="kv">${p.site ? `
@@ -475,51 +489,92 @@ function ouvrirProjet(id){
     <div class="row">
       ${p.site?`<a class="btn small" href="${esc(p.site)}" target="_blank" rel="noopener" style="text-decoration:none">Ouvrir le site</a>`:''}
       <button type="button" class="btn small" data-auditer="${esc(p.id)}" ${D.enCours?'disabled':''}>Audit complet du code</button>
+    </div>`;
+}
+
+let projetOuvert = null, pointsOuverts = [], convTimer = null, convVue = '';
+function ouvrirProjet(id, volet){
+  const p = D.projets.find(x=>x.id===id); if(!p) return;
+  projetOuvert = p.id; convVue = '';
+  ouvrir(`
+    <div class="dhead">
+      <div class="row" style="justify-content:space-between"><div class="row"><span class="dot d-${voyant(p)}"></span><h2 id="dTitle">${esc(p.nom)}</h2><span class="label">${p.notation?'sécurité '+p.notation.lettre+' · ':''}${p.site?esc(p.site.replace(/^https?:\/\//,'')):'pas de site suivi'}</span></div>
+        <button type="button" class="close" data-fermer>Fermer ✕</button></div>
+      <div class="dtabs" role="tablist"><button type="button" class="tab" data-volet="conv">Conversation</button><button type="button" class="tab" data-volet="fiche">Fiche</button></div>
     </div>
-    <h4>Parler à Claude</h4>
-    <div class="conv" id="conv"><p class="muted" style="margin:0;font-size:13px">Chargement…</p></div>
-    <div class="saisie">
-      <textarea id="convTexte" placeholder="Demandez quelque chose à Claude sur ${esc(p.nom)}…"></textarea>
-      <div class="row" style="justify-content:space-between">
-        <span class="muted" style="font-size:12px">« Envoyer » : il lit et propose, sans rien toucher. « Vas-y » : il modifie sa copie.</span>
-        <span class="row" style="gap:6px"><button type="button" class="btn small" data-conv="discussion">Envoyer</button><button type="button" class="btn small primary" data-conv="travail">Vas-y, fais-le</button></span>
+    <div class="dpane" id="v-fiche" hidden>${ficheProjet(p)}</div>
+    <div class="convpane" id="v-conv">
+      <div class="messages" id="messages"><div class="conv" id="conv"></div></div>
+      <div class="saisie">
+        <textarea id="convTexte" rows="2" placeholder="Écrivez à Claude sur ${esc(p.nom)}… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"></textarea>
+        <div class="row" style="justify-content:space-between">
+          <span class="muted" style="font-size:12px" id="convInfo">Claude travaille dans une copie à part. Il ne garde et ne met en prod que si vous le lui demandez.</span>
+          <span class="row" style="gap:6px"><button type="button" class="btn small" data-conv-nouvelle>Nouvelle conversation</button><button type="button" class="btn small primary" data-conv-envoyer>Envoyer</button></span>
+        </div>
       </div>
-    </div>`);
-  projetOuvert = p.id; pointsOuverts = l; chargerConv();
+    </div>`, 'projet');
+  volet ? montrerVolet(volet) : chargerConv(true);
+}
+function montrerVolet(v){
+  document.querySelectorAll('[data-volet]').forEach(b=>b.setAttribute('aria-selected', b.dataset.volet===v));
+  $('#v-fiche').hidden = v!=='fiche'; $('#v-conv').hidden = v!=='conv';
+  if(v==='conv'){ chargerConv(); $('#convTexte')?.focus(); }
 }
 
 // ---------- Conversation avec Claude ----------
-let projetOuvert = null, pointsOuverts = [], convTimer = null, convVue = '';
-function texteClaude(t){ return esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`([^`\n]+)`/g,'<code>$1</code>'); }
+function texteClaude(t){
+  return esc(t)
+    .replace(/```[a-z]*\n([\s\S]*?)```/g,(m,c)=>`<pre class="files">${c}</pre>`)
+    .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`([^`\n]+)`/g,'<code>$1</code>')
+    .replace(/^#{1,4} (.+)$/gm,'<b>$1</b>');
+}
 function diffColore(d){ return d.split('\n').map(l=>{ const e=esc(l); return l.startsWith('+')&&!l.startsWith('+++')?`<span class="diff-add">${e}</span>`:l.startsWith('-')&&!l.startsWith('---')?`<span class="diff-del">${e}</span>`:l.startsWith('@@')?`<span class="diff-hunk">${e}</span>`:e; }).join('\n'); }
-async function chargerConv(){
+function rendreBlocs(m, vivant){
+  const out = []; let actions = [];
+  const vider = () => { if(!actions.length) return;
+    out.push(`<ul class="activites">${actions.map(a=>`<li class="${a.refuse?'refuse':a.echec?'echec':''}">${esc(a.t)}${a.refuse?' — refusé':''}</li>`).join('')}</ul>`); actions=[]; };
+  // Les anciens messages (avant le mot à mot) n'avaient qu'un texte et une liste d'actions.
+  const blocs = m.blocs || [...(m.activites||[]).map(t=>({type:'action',t})), ...(m.texte?[{type:'texte',t:m.texte}]:[])];
+  for(const b of blocs){ if(b.type==='action') actions.push(b); else { vider(); if(b.t.trim()) out.push(`<div class="texte">${texteClaude(b.t)}</div>`); } }
+  vider();
+  if(m.erreur) out.push(`<div class="erreur">${esc(m.erreur)}</div>`);
+  if(vivant) out.push(`<div class="attente"><i></i>Claude travaille…</div>`);
+  else if(m.duree) out.push(`<span class="cout">${m.duree} s</span>`);
+  return out.join('');
+}
+async function chargerConv(choisirVolet){
   clearTimeout(convTimer);
   if(!projetOuvert || $('#scrim').hidden) return;
   let c; try{ c = await api('/api/conversation/'+projetOuvert); }catch{ return; }
-  const zone = $('#conv'); if(!zone) return;
-  const html = (c.messages.length ? c.messages.map(m=>{
-    if(m.role==='systeme') return `<div class="bulle systeme">${esc(m.texte)}</div>`;
-    if(m.role==='vous') return `<div class="bulle vous"><span class="mode">${m.mode==='travail'?'Vas-y':'Question'}</span>${esc(m.texte)}</div>`;
-    const dernier = m===c.messages.at(-1) && c.enCours;
-    const acts = m.activites||[];
-    return `<div class="bulle claude">${m.erreur?`<span class="erreur">${esc(m.erreur)}</span>`:m.texte?texteClaude(m.texte):''}
-      ${dernier?`<div class="attente"><i></i>${m.mode==='travail'?'Claude travaille…':'Claude lit le projet…'}</div>`:''}
-      ${acts.length?(dernier?`<ul class="activites">${acts.slice(-6).map(a=>`<li>${esc(a)}</li>`).join('')}</ul>`:`<details><summary class="muted" style="font-size:11.5px;cursor:pointer">${acts.length} action${acts.length>1?'s':''}</summary><ul class="activites">${acts.map(a=>`<li>${esc(a)}</li>`).join('')}</ul></details>`):''}
-      ${m.duree?`<span class="cout">${m.duree} s</span>`:''}</div>`;
-  }).join('') : '<p class="muted" style="margin:0;font-size:13px">Aucune conversation. Cliquez sur « Demander à Claude » sous un point, ou écrivez ci-dessous.</p>')
-  + (c.enCours ? '<div class="row"><button type="button" class="btn small" data-conv-arreter>Arrêter Claude</button></div>' : '')
+  if(choisirVolet){ montrerVolet(c.messages.length ? 'conv' : 'fiche'); return; }
+  const zone = $('#conv'), defile = $('#messages'); if(!zone) return;
+  const html = (c.messages.length ? c.messages.map((m,i)=>{
+    if(m.role==='systeme') return `<div class="msg systeme">${esc(m.texte)}</div>`;
+    if(m.role==='vous') return `<div class="msg vous">${esc(m.texte)}</div>`;
+    return `<div class="msg claude">${rendreBlocs(m, c.enCours && i===c.messages.length-1)}</div>`;
+  }).join('') : `<div class="msg systeme" style="margin-top:20px">Posez une question, demandez une correction ou une nouveauté. Claude lit le projet, vous propose, et agit quand vous lui dites « vas-y ».</div>`)
+  + (c.enCours ? '<div class="row"><button type="button" class="btn small" data-conv-arreter>Arrêter</button></div>' : '')
   + (c.modif && !c.enCours ? `<div class="modif">
-      <b>Modifications prêtes, pas encore dans votre projet</b>
-      <span style="font-size:12.5px">Branche ${esc(c.modif.branche)} · ${esc(c.modif.resume)}</span>
+      <b>Modifications prêtes dans la copie de Claude</b>
+      <span style="font-size:12.5px">${esc(c.modif.resume)}</span>
       <ul>${c.modif.fichiers.map(f=>`<li>${esc(f.etat==='A'?'nouveau':f.etat==='D'?'supprimé':'modifié')} · ${esc(f.chemin)}</li>`).join('')}</ul>
-      <details><summary style="cursor:pointer;font-size:13px">Voir le détail des changements</summary><pre class="files">${diffColore(c.modif.diff)}</pre></details>
+      <details><summary style="cursor:pointer;font-size:13px">Voir les changements</summary><pre class="files">${diffColore(c.modif.diff)}</pre></details>
       <div class="row"><button type="button" class="btn small primary" data-conv-garder>Garder</button><button type="button" class="btn small" data-conv-jeter>Jeter</button>
-      <span class="muted" style="font-size:12px">« Garder » l'ajoute à votre projet. Rien n'est mis en ligne.</span></div>
-    </div>` : '')
-  + (!c.modif && !c.enCours && c.atelier ? '<div class="row"><button type="button" class="btn small" data-conv-jeter>Clore la conversation</button></div>' : '');
-  if(html !== convVue){ const enBas = zone.parentElement.scrollHeight - zone.parentElement.scrollTop - zone.parentElement.clientHeight < 120; zone.innerHTML = html; convVue = html; if(enBas) zone.parentElement.scrollTop = zone.parentElement.scrollHeight; }
-  document.querySelectorAll('[data-conv]').forEach(b=>b.disabled = c.enCours);
-  if(c.enCours) convTimer = setTimeout(chargerConv, 1500);
+      <span class="muted" style="font-size:12px">ou dites-lui « garde », « déploie »…</span></div>
+    </div>` : '');
+  if(html !== convVue){
+    const enBas = defile.scrollHeight - defile.scrollTop - defile.clientHeight < 140;
+    zone.innerHTML = html; convVue = html;
+    if(enBas) defile.scrollTop = defile.scrollHeight;
+  }
+  const b = $('[data-conv-envoyer]'); if(b) b.disabled = c.enCours;
+  if(c.enCours) convTimer = setTimeout(chargerConv, 700);
+}
+async function envoyerConv(){
+  const t = $('#convTexte'), texte = t.value.trim();
+  if(!texte) return t.focus();
+  try{ await api('/api/conversation/'+projetOuvert+'/message',{texte}); t.value=''; convVue=''; await chargerConv(); $('#messages').scrollTop = $('#messages').scrollHeight; }
+  catch(err){ toast(err.message); }
 }
 async function deuxClics(b, libelle){
   if(b.dataset.arme) return true;
@@ -527,6 +582,7 @@ async function deuxClics(b, libelle){
   setTimeout(()=>{ if(b.isConnected){ delete b.dataset.arme; b.textContent=avant; b.classList.remove('danger'); } },4000);
   return false;
 }
+
 
 function ouvrirAlerte(id){
   const a = D.alertes.find(x=>x.id===id); if(!a) return;
@@ -563,20 +619,18 @@ document.addEventListener('click', async e=>{
   const b = e.target.closest('button, tr[data-projet]'); if(!b) return;
   if(b.dataset.fermer!==undefined) return fermer();
   if(b.dataset.vu){ try{ await api('/api/alertes/'+b.dataset.vu+'/vu',{}); fermer(); toast('Marquée comme vue'); charger(); }catch(err){ toast(err.message); } return; }
+  if(b.dataset.volet) return montrerVolet(b.dataset.volet);
   if(b.dataset.demander!==undefined){
-    const x = pointsOuverts[+b.dataset.demander]; const t = $('#convTexte');
-    t.value = `Point relevé par Zylot : ${x.t}\n${x.d}\n\nQu'est-ce que tu proposes de faire ?`;
-    t.focus(); t.scrollIntoView({block:'center'}); return;
+    const x = pointsOuverts[+b.dataset.demander];
+    montrerVolet('conv'); const t = $('#convTexte');
+    t.value = `${x.t} : ${x.d}\nQu'est-ce que tu proposes ?`; t.focus(); return;
   }
-  if(b.dataset.conv){
-    const texte = $('#convTexte').value.trim();
-    if(!texte){ toast(b.dataset.conv==='travail' ? 'Écrivez « vas-y » ou précisez ce qu\'il doit faire' : 'Écrivez votre question'); $('#convTexte').focus(); return; }
-    try{ await api('/api/conversation/'+projetOuvert+'/message',{texte, mode:b.dataset.conv}); $('#convTexte').value=''; chargerConv(); }catch(err){ toast(err.message); }
-    return;
-  }
+  if(b.dataset.convEnvoyer!==undefined) return envoyerConv();
+  if(b.dataset.convNouvelle!==undefined){ if(!await deuxClics(b,'Confirmer : tout effacer')) return;
+    try{ await api('/api/conversation/'+projetOuvert+'/nouvelle',{}); convVue=''; chargerConv(); }catch(err){ toast(err.message); } return; }
   if(b.dataset.convArreter!==undefined){ await api('/api/conversation/'+projetOuvert+'/arreter',{}).catch(()=>{}); toast('Claude arrêté'); return; }
   if(b.dataset.convGarder!==undefined){ if(!await deuxClics(b,'Confirmer : ajouter à mon projet')) return;
-    try{ const r = await api('/api/conversation/'+projetOuvert+'/garder',{}); toast('Gardé'); chargerConv(); charger(); }catch(err){ toast(err.message); } return; }
+    try{ const r = await api('/api/conversation/'+projetOuvert+'/garder',{}); toast(r.message||'Gardé'); chargerConv(); charger(); }catch(err){ toast(err.message); } return; }
   if(b.dataset.convJeter!==undefined){ if(!await deuxClics(b,'Confirmer')) return;
     try{ await api('/api/conversation/'+projetOuvert+'/jeter',{}); chargerConv(); }catch(err){ toast(err.message); } return; }
   if(b.dataset.alerte) return ouvrirAlerte(b.dataset.alerte);
@@ -586,7 +640,10 @@ document.addEventListener('click', async e=>{
   if(b.id==='btnSurv'){ await api('/api/surveillance',{}).catch(()=>{}); toast('Vérification lancée'); setTimeout(charger,4000); }
   if(b.id==='btnSecu'){ try{ await api('/api/securite',{}); toast('Contrôles lancés, une minute environ'); setTimeout(charger,1500); }catch(err){ toast(err.message); } }
 });
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') fermer(); });
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') return fermer();
+  if(e.target.id==='convTexte' && e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); envoyerConv(); }
+});
 
 async function charger(){
   try{

@@ -12,7 +12,7 @@ Outil personnel : piloter Claude Code sur tous les projets depuis une seule inte
 - Adresse : http://zylot.localhost:4000 (le port 80 demande les droits administrateur sur macOS).
 - Dans l'interface, la ligue s'appelle « Ligue hockey » (le sigle est proscrit sur ce projet).
 
-- Conversations (`coeur/conversation.js`) : worktree dans `donnees/ateliers/<projet>`, `node_modules`/`vendor` partagés par lien symbolique, session Claude reprise avec `--resume`. Droits : lecture en discussion, écriture + vérifications (lint, build, php -l) en travail ; jamais push ni déploiement. « Garder » = commit sur la branche puis `merge --ff-only`, sinon la branche reste à fusionner à la main.
+- Conversations (`coeur/conversation.js`) : un seul mode, Claude écrit librement dans son worktree (`donnees/ateliers/<projet>`, node_modules/vendor en lien symbolique), session reprise avec `--resume`, texte mot à mot (`--include-partial-messages`). Il agit sur le vrai projet via `outils/zylot` (jeton par tour de conversation) : `garder "message"` = commit + `merge --ff-only` ; `deployer` = commande `deploy` de projets.json, refusée si le dernier message du propriétaire ne demande pas la mise en prod (regex DEMANDE_PROD). Sous-agents, push, commit direct et rm interdits.
 
 ## Pièges connus
 
