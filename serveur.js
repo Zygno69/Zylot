@@ -51,10 +51,10 @@ function json(res, code, valeur) {
   res.end(JSON.stringify(valeur));
 }
 
-function corps(req) {
+function corps(req, max = 1e5) {
   return new Promise(resolve => {
     let b = '';
-    req.on('data', d => { b += d; if (b.length > 1e5) req.destroy(); });
+    req.on('data', d => { b += d; if (b.length > max) req.destroy(); });
     req.on('end', () => { try { resolve(JSON.parse(b || '{}')); } catch { resolve({}); } });
   });
 }
@@ -166,9 +166,16 @@ http.createServer(async (req, res) => {
     return fs.createReadStream(path.join(S.RACINE, 'interface', 'index.html')).pipe(res);
   }
   if (req.method === 'GET' && url.pathname === '/api/etat') return json(res, 200, await etat());
-  const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter|nouvelle|deployer|annulerprod|repondreprod))?$/);
+  const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter|nouvelle|deployer|annulerprod|repondreprod|image))?$/);
   const projetConv = mc && S.projets().find(p => p.id === mc[1]);
   if (mc && !projetConv) return json(res, 404, { erreur: 'Projet inconnu' });
+  const mi = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)\/image\/([a-z0-9]+\.(png|jpg|webp|gif))$/);
+  if (mi && req.method === 'GET') {
+    const f = conversation.cheminImage(mi[1], mi[2]);
+    if (!f) return json(res, 404, { erreur: 'Image introuvable' });
+    res.writeHead(200, { 'Content-Type': { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' }[mi[3]], 'Cache-Control': 'private, max-age=86400' });
+    return fs.createReadStream(f).pipe(res);
+  }
   if (mc && req.method === 'GET' && !mc[2]) return json(res, 200, { ...conversation.etat(projetConv.id), suggestions: await suggestionsProjet(projetConv) });
 
   // Appels de la commande `zylot`, lancée par Claude pendant une conversation.
@@ -202,10 +209,15 @@ http.createServer(async (req, res) => {
       lancerAudit(ids);
       return json(res, 202, { ok: true });
     }
+    if (mc && mc[2] === 'image') {
+      const { type, donnees } = await corps(req, 15e6);
+      const r = conversation.enregistrerImage(projetConv.id, type, donnees);
+      return json(res, r.erreur ? 400 : 200, r);
+    }
     if (mc && mc[2] === 'message') {
-      const { texte = '' } = await corps(req);
-      if (!String(texte).trim()) return json(res, 400, { erreur: 'Message vide' });
-      const r = await conversation.envoyer(projetConv, String(texte).slice(0, 8000), await contexteProjet(projetConv));
+      const { texte = '', images = [] } = await corps(req);
+      if (!String(texte).trim() && !images.length) return json(res, 400, { erreur: 'Message vide' });
+      const r = await conversation.envoyer(projetConv, String(texte).slice(0, 8000) || 'Regarde cette capture.', await contexteProjet(projetConv), { images: Array.isArray(images) ? images.map(String) : [] });
       return json(res, r.erreur ? 409 : 202, r);
     }
     if (mc && mc[2] === 'deployer') {

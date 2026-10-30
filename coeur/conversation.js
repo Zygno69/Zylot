@@ -11,8 +11,28 @@ const S = require('./stockage');
 const CONV = path.join(S.DONNEES, 'conversations');
 const ATELIERS = path.join(S.DONNEES, 'ateliers');
 const OUTILS = path.join(S.RACINE, 'outils');
+const IMAGES = path.join(CONV, 'images');
 fs.mkdirSync(CONV, { recursive: true });
 fs.mkdirSync(ATELIERS, { recursive: true });
+fs.mkdirSync(IMAGES, { recursive: true });
+
+// Captures jointes à un message : rangées hors de la copie de travail (pour ne jamais finir dans un commit).
+const TYPES_IMAGE = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+function enregistrerImage(id, type, base64) {
+  const ext = TYPES_IMAGE[type];
+  if (!ext) return { erreur: 'Format non pris en charge (PNG, JPEG, WebP ou GIF).' };
+  const donnees = Buffer.from(String(base64 || ''), 'base64');
+  if (!donnees.length || donnees.length > 10e6) return { erreur: 'Image vide ou trop lourde (10 Mo au plus).' };
+  const dossier = path.join(IMAGES, id); fs.mkdirSync(dossier, { recursive: true });
+  const nom = Date.now().toString(36) + crypto.randomBytes(4).toString('hex') + '.' + ext;
+  fs.writeFileSync(path.join(dossier, nom), donnees);
+  return { ok: true, nom };
+}
+function cheminImage(id, nom) {
+  if (!/^[a-z0-9]+\.(png|jpg|webp|gif)$/.test(nom)) return null;
+  const f = path.join(IMAGES, id, nom);
+  return fs.existsSync(f) ? f : null;
+}
 
 const enCours = new Map(); // projet → { enfant, jeton }
 const prodEnCours = new Set();
@@ -109,7 +129,7 @@ function activite(outil, entree, racine) {
 
 const LIMITE = /usage limit|rate limit|limit reached|hit your limit|5-hour limit|weekly limit/i;
 
-async function envoyer(p, texte, contexte, { role = 'vous' } = {}) {
+async function envoyer(p, texte, contexte, { role = 'vous', images = [] } = {}) {
   if (enCours.has(p.id)) return { erreur: 'Claude est déjà en train de répondre sur ce projet.' };
   const c = lireConv(p.id);
   const souci = await preparerAtelier(p, c);
@@ -123,7 +143,8 @@ async function envoyer(p, texte, contexte, { role = 'vous' } = {}) {
     c.sessionId = null;
   }
   c.version = VERSION_CONSIGNES;
-  c.messages.push({ role, texte, quand: new Date().toISOString() });
+  images = images.filter(n => cheminImage(p.id, n)).slice(0, 6);
+  c.messages.push({ role, texte, images: images.length ? images : undefined, quand: new Date().toISOString() });
   const reponse = { role: 'claude', blocs: [], quand: new Date().toISOString() };
   c.messages.push(reponse);
   ecrireConv(p.id, c);
@@ -137,7 +158,7 @@ async function envoyer(p, texte, contexte, { role = 'vous' } = {}) {
     '--strict-mcp-config',
     '--append-system-prompt', consigneSysteme(p, contexte),
     // Le vrai dossier du projet est lisible (pour voir le travail en cours du propriétaire), mais Claude n'écrit que dans sa copie.
-    '--add-dir', p.dossier,
+    '--add-dir', p.dossier, '--add-dir', path.join(IMAGES, p.id),
     '--allowedTools', [
       ...AUTORISE,
       ...['Edit', 'Write', 'MultiEdit'].map(o => `${o}(/${c.atelier.chemin}/**)`),
@@ -155,6 +176,7 @@ async function envoyer(p, texte, contexte, { role = 'vous' } = {}) {
   });
   const enfant = spawn('claude', args, { cwd: c.atelier.chemin, env });
   if (role === 'zylot') texte = '[Message de Zylot, pas du propriétaire] ' + texte;
+  if (images.length) texte += '\n\n[Capture' + (images.length > 1 ? 's' : '') + ' d\'écran jointe' + (images.length > 1 ? 's' : '') + ' par le propriétaire, à regarder avec l\'outil Read : ' + images.map(n => path.join(IMAGES, p.id, n)).join(', ') + ']';
   enCours.set(p.id, { enfant, jeton });
 
   // On garde au fil de l'eau le texte (mot à mot) et les actions, pour que l'interface les montre en direct.
@@ -435,4 +457,4 @@ async function pousser(p) {
 
 function annulerProd(id) { const c = lireConv(id); if (c.demandeProd || c.questionProd) { c.demandeProd = null; c.questionProd = null; systeme(c, 'Mise en ligne annulée.'); ecrireConv(id, c); } return { ok: true }; }
 
-module.exports = { etat, envoyer, garder, deployer, pousser, jeter, nouvelle, arreter, jetonValide, annulerProd, enCours };
+module.exports = { enregistrerImage, cheminImage, etat, envoyer, garder, deployer, pousser, jeter, nouvelle, arreter, jetonValide, annulerProd, enCours };

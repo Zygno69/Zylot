@@ -159,6 +159,12 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
 .convpane{flex:1;display:flex;flex-direction:column;min-height:0}
 .messages{flex:1;overflow-y:auto;padding:18px 22px}
 .conv{display:flex;flex-direction:column;gap:14px}
+.pieces{display:flex;gap:8px;flex-wrap:wrap}
+.piece{position:relative}
+.piece img{height:64px;max-width:120px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
+.piece button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);font-size:13px;line-height:20px;padding:0}
+.msg .capture{display:block;max-width:100%;max-height:260px;border-radius:8px;margin-bottom:6px}
+.convpane.depot .messages{outline:2px dashed var(--accent);outline-offset:-8px}
 .suggestions{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:12px;padding:14px}
 .sugg{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding-top:10px;border-top:1px solid var(--line)}
 .msg{font-size:14px;line-height:1.55;overflow-wrap:anywhere}
@@ -469,7 +475,7 @@ function rendrePropositions(P){
 
 // ---------- Détail d'un projet ----------
 function ouvrir(html, classe=''){ const d=$('#drawer'); d.className='drawer '+classe; d.innerHTML=(classe?'':'<button type="button" class="close" data-fermer>Fermer ✕</button>')+html; $('#scrim').hidden=false; (d.querySelector('#convTexte')||d.querySelector('.close'))?.focus(); }
-function fermer(){ $('#scrim').hidden=true; projetOuvert=null; convVue=''; clearTimeout(convTimer); }
+function fermer(){ $('#scrim').hidden=true; projetOuvert=null; convVue=''; clearTimeout(convTimer); pieces.forEach(x=>URL.revokeObjectURL(x.url)); pieces=[]; }
 
 function ficheProjet(p){
   const l = aRegarder(p), e = p.surveillance?.etat, dep = p.depot;
@@ -510,10 +516,12 @@ function ouvrirProjet(id, volet){
     <div class="convpane" id="v-conv">
       <div class="messages" id="messages"><div class="conv" id="conv"></div></div>
       <div class="saisie">
-        <textarea id="convTexte" rows="2" placeholder="Écrivez à Claude sur ${esc(p.nom)}… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"></textarea>
+        <div class="pieces" id="pieces" hidden></div>
+        <textarea id="convTexte" rows="2" placeholder="Écrivez à Claude sur ${esc(p.nom)}… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne, Cmd+V pour coller une capture)"></textarea>
+        <input type="file" id="convFichier" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
         <div class="row" style="justify-content:space-between">
           <span class="muted" style="font-size:12px" id="convInfo">Claude travaille dans une copie à part. Il ne garde et ne met en prod que si vous le lui demandez.</span>
-          <span class="row" style="gap:6px"><button type="button" class="btn small" data-conv-nouvelle>Nouvelle conversation</button><button type="button" class="btn small primary" data-conv-envoyer>Envoyer</button></span>
+          <span class="row" style="gap:6px"><button type="button" class="btn small" data-conv-nouvelle>Nouvelle conversation</button><button type="button" class="btn small" data-conv-joindre>Joindre une capture</button><button type="button" class="btn small primary" data-conv-envoyer>Envoyer</button></span>
         </div>
       </div>
     </div>`, 'projet');
@@ -555,7 +563,7 @@ async function chargerConv(choisirVolet){
   suggestionsOuvertes = c.suggestions || [];
   const html = (c.messages.length ? c.messages.map((m,i)=>{
     if(m.role==='systeme') return `<div class="msg systeme">${esc(m.texte)}</div>`;
-    if(m.role==='vous') return `<div class="msg vous">${esc(m.texte)}</div>`;
+    if(m.role==='vous') return `<div class="msg vous">${(m.images||[]).map(n=>`<a href="/api/conversation/${esc(projetOuvert)}/image/${esc(n)}" target="_blank"><img class="capture" src="/api/conversation/${esc(projetOuvert)}/image/${esc(n)}" alt="Capture jointe"></a>`).join('')}${esc(m.texte)}</div>`;
     if(m.role==='zylot') return `<div class="msg systeme">Zylot a transmis le compte rendu de la mise en ligne à Claude.</div>`;
     return `<div class="msg claude">${rendreBlocs(m, c.enCours && i===c.messages.length-1)}</div>`;
   }).join('') : (c.suggestions?.length ? `<div class="suggestions"><b>Ce que je vous propose sur ce projet</b>${c.suggestions.slice(0,6).map((x,i)=>`
@@ -587,12 +595,43 @@ async function chargerConv(choisirVolet){
   const b = $('[data-conv-envoyer]'); if(b) b.disabled = c.enCours;
   if(c.enCours || c.prodEnCours) convTimer = setTimeout(chargerConv, c.enCours ? 700 : 2000);
 }
+// Captures en attente d'envoi (collées, déposées ou choisies)
+let pieces = [];
+function rendrePieces(){
+  const z = $('#pieces'); if(!z) return;
+  z.hidden = !pieces.length;
+  z.innerHTML = pieces.map((x,i)=>`<span class="piece"><img src="${x.url}" alt="Capture à joindre"><button type="button" data-retirer-piece="${i}" aria-label="Retirer">×</button></span>`).join('');
+}
+function ajouterFichiers(fichiers){
+  for(const f of fichiers){
+    if(!/^image\/(png|jpeg|webp|gif)$/.test(f.type)){ toast('Seules les images sont acceptées'); continue; }
+    if(f.size > 10e6){ toast('Image trop lourde (10 Mo au plus)'); continue; }
+    if(pieces.length >= 6){ toast('6 captures au plus par message'); break; }
+    pieces.push({ fichier: f, url: URL.createObjectURL(f) });
+  }
+  rendrePieces();
+}
+const enBase64 = f => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = ko; r.readAsDataURL(f); });
 async function envoyerConv(){
   const t = $('#convTexte'), texte = t.value.trim();
-  if(!texte) return t.focus();
-  try{ await api('/api/conversation/'+projetOuvert+'/message',{texte}); t.value=''; convVue=''; await chargerConv(); $('#messages').scrollTop = $('#messages').scrollHeight; }
-  catch(err){ toast(err.message); }
+  if(!texte && !pieces.length) return t.focus();
+  try{
+    const images = [];
+    for(const x of pieces){ const r = await api('/api/conversation/'+projetOuvert+'/image',{type:x.fichier.type, donnees: await enBase64(x.fichier)}); images.push(r.nom); }
+    await api('/api/conversation/'+projetOuvert+'/message',{texte, images});
+    t.value=''; pieces.forEach(x=>URL.revokeObjectURL(x.url)); pieces=[]; rendrePieces();
+    convVue=''; await chargerConv(); $('#messages').scrollTop = $('#messages').scrollHeight;
+  }catch(err){ toast(err.message); }
 }
+document.addEventListener('paste', e=>{
+  if(!projetOuvert || $('#v-conv')?.hidden) return;
+  const f = [...(e.clipboardData?.files||[])].filter(x=>x.type.startsWith('image/'));
+  if(f.length){ e.preventDefault(); ajouterFichiers(f); }
+});
+document.addEventListener('dragover', e=>{ if(projetOuvert && e.target.closest?.('#v-conv')){ e.preventDefault(); $('#v-conv').classList.add('depot'); } });
+document.addEventListener('dragleave', e=>{ if(e.target.id==='v-conv') $('#v-conv').classList.remove('depot'); });
+document.addEventListener('drop', e=>{ if(projetOuvert && e.target.closest?.('#v-conv')){ e.preventDefault(); $('#v-conv').classList.remove('depot'); ajouterFichiers([...e.dataTransfer.files]); } });
+document.addEventListener('change', e=>{ if(e.target.id==='convFichier'){ ajouterFichiers([...e.target.files]); e.target.value=''; } });
 async function deuxClics(b, libelle){
   if(b.dataset.arme) return true;
   b.dataset.arme='1'; const avant=b.textContent; b.textContent=libelle; b.classList.add('danger');
@@ -643,6 +682,8 @@ document.addEventListener('click', async e=>{
     t.value = `${x.t} : ${x.d}\nQu'est-ce que tu proposes ?`; t.focus(); return;
   }
   if(b.dataset.convEnvoyer!==undefined) return envoyerConv();
+  if(b.dataset.convJoindre!==undefined) return $('#convFichier').click();
+  if(b.dataset.retirerPiece!==undefined){ const x = pieces.splice(+b.dataset.retirerPiece,1)[0]; if(x) URL.revokeObjectURL(x.url); return rendrePieces(); }
   if(b.dataset.sugg!==undefined){ const x = suggestionsOuvertes[+b.dataset.sugg]; $('#convTexte').value = `Vas-y : ${x.titre}. (${x.detail})`; return envoyerConv(); }
   if(b.dataset.convProd!==undefined){ if(!await deuxClics(b,'Confirmer la mise en ligne')) return;
     try{ await api('/api/conversation/'+projetOuvert+'/deployer',{}); convVue=''; chargerConv(); }catch(err){ toast(err.message); } return; }
