@@ -17,7 +17,7 @@ fs.mkdirSync(ATELIERS, { recursive: true });
 const enCours = new Map(); // projet → { enfant, jeton }
 const prodEnCours = new Set();
 // À augmenter quand les consignes changent : les conversations repartent alors sur une session neuve, avec un résumé.
-const VERSION_CONSIGNES = 5;
+const VERSION_CONSIGNES = 6;
 
 // Ce que Claude peut faire seul, dans sa copie. Tout le reste est refusé sans lui demander.
 const AUTORISE = [
@@ -26,7 +26,7 @@ const AUTORISE = [
   'Bash(ls:*)', 'Bash(cat:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(grep:*)', 'Bash(sort:*)', 'Bash(uniq:*)',
   'Bash(curl -s:*)', 'Bash(curl -I:*)', 'Bash(curl -sI:*)', 'Bash(curl -sIL:*)', 'Bash(curl -s -I:*)',
   'Bash(php -l:*)', 'Bash(node --check:*)', 'Bash(npm run build:*)', 'Bash(npm run lint:*)', 'Bash(npm test:*)', 'Bash(npx eslint:*)',
-  'Bash(zylot garder:*)', 'Bash(zylot deployer:*)', 'Bash(zylot etat)',
+  'Bash(sleep:*)', 'Bash(zylot garder:*)', 'Bash(zylot deployer:*)', 'Bash(zylot etat)',
 ];
 const INTERDIT = ['Agent', 'Task', 'WebSearch', 'Bash(git push:*)', 'Bash(git remote:*)', 'Bash(git commit:*)', 'Bash(git checkout:*)', 'Bash(git reset:*)', 'Bash(rm:*)', 'NotebookEdit'];
 
@@ -105,7 +105,7 @@ function activite(outil, entree, racine) {
 
 const LIMITE = /usage limit|rate limit|limit reached|hit your limit|5-hour limit|weekly limit/i;
 
-async function envoyer(p, texte, contexte) {
+async function envoyer(p, texte, contexte, { role = 'vous' } = {}) {
   if (enCours.has(p.id)) return { erreur: 'Claude est déjà en train de répondre sur ce projet.' };
   const c = lireConv(p.id);
   const souci = await preparerAtelier(p, c);
@@ -119,7 +119,7 @@ async function envoyer(p, texte, contexte) {
     c.sessionId = null;
   }
   c.version = VERSION_CONSIGNES;
-  c.messages.push({ role: 'vous', texte, quand: new Date().toISOString() });
+  c.messages.push({ role, texte, quand: new Date().toISOString() });
   const reponse = { role: 'claude', blocs: [], quand: new Date().toISOString() };
   c.messages.push(reponse);
   ecrireConv(p.id, c);
@@ -143,6 +143,7 @@ async function envoyer(p, texte, contexte) {
     BASH_DEFAULT_TIMEOUT_MS: '900000', BASH_MAX_TIMEOUT_MS: '900000',
   });
   const enfant = spawn('claude', args, { cwd: c.atelier.chemin, env });
+  if (role === 'zylot') texte = '[Message de Zylot, pas du propriétaire] ' + texte;
   enCours.set(p.id, { enfant, jeton });
 
   // On garde au fil de l'eau le texte (mot à mot) et les actions, pour que l'interface les montre en direct.
@@ -263,9 +264,11 @@ async function garder(p, messageCommit) {
   return { ok: fusion.ok, message };
 }
 
-function executer(argv, dossier, delai) {
+// stdin reçoit la réponse donnée par le propriétaire (s'il y en a une), puis il est fermé : un script qui pose une question ne reste jamais bloqué.
+function executer(argv, dossier, delai, reponse = '') {
   return new Promise(resolve => {
-    const e = spawn(argv[0], argv.slice(1), { cwd: dossier, env: process.env });
+    const e = spawn(argv[0], argv.slice(1), { cwd: dossier, env: { ...process.env, PYTHONUNBUFFERED: '1' } });
+    e.stdin.end(reponse);
     e.on('error', err => resolve({ code: -1, sortie: 'Impossible de lancer ' + argv[0] + ' : ' + err.message }));
     let sortie = '';
     e.stdout.on('data', d => sortie += d); e.stderr.on('data', d => sortie += d);
@@ -275,7 +278,9 @@ function executer(argv, dossier, delai) {
 }
 
 // Mise en prod demandée par le propriétaire : garder si besoin, lancer la commande de déploiement du projet, vérifier le site.
-async function deployer(p, verifierApres, messageCommit, { confirme = false } = {}) {
+const QUESTION = /\[(o|y)\/n\]|\[o\/N\]|\(o\/n\)|EOFError|\?\s*$/i;
+
+async function deployer(p, verifierApres, messageCommit, { confirme = false, reponse = '' } = {}) {
   if (!p.deploy) return { erreur: `Aucune commande de déploiement n'est configurée pour ${p.nom} dans projets.json (champ « deploy »).` };
   const c = lireConv(p.id);
   const dernier = [...c.messages].reverse().find(m => m.role === 'vous');
@@ -286,11 +291,11 @@ async function deployer(p, verifierApres, messageCommit, { confirme = false } = 
   }
   if (prodEnCours.has(p.id)) return { erreur: 'Une mise en prod est déjà en cours.' };
   prodEnCours.add(p.id);
-  try { return await deployerVraiment(p, verifierApres, messageCommit || (c.demandeProd && c.demandeProd.message)); }
+  try { return await deployerVraiment(p, verifierApres, messageCommit || (c.demandeProd && c.demandeProd.message), reponse); }
   finally { prodEnCours.delete(p.id); }
 }
 
-async function deployerVraiment(p, verifierApres, messageCommit) {
+async function deployerVraiment(p, verifierApres, messageCommit, reponse) {
   let avant = '';
   const g = await garder(p, messageCommit);
   if (g.erreur) return g;
@@ -308,8 +313,19 @@ async function deployerVraiment(p, verifierApres, messageCommit) {
     if (!envoyes.length) return { erreur: 'Rien à mettre en ligne : aucun fichier changé.' };
     argv = argv.flatMap(a => a === '{fichiers}' ? envoyes : [a]);
   }
-  const r = await executer(argv, p.dossier, 15 * 60e3);
+  const r = await executer(argv, p.dossier, 15 * 60e3, reponse);
   const fin = r.sortie.trim().split('\n').slice(-25).join('\n');
+  // Le script a posé une question qu'il faut transmettre au propriétaire.
+  // On garde ce que le script a affiché avant l'erreur de lecture (Python : « Traceback… EOFError »).
+  const avantErreur = r.sortie.split(/Traceback \(most recent call last\)|EOFError/)[0];
+  const lignes = avantErreur.trim().split('\n').filter(l => l.trim());
+  if (r.code !== 0 && !reponse && QUESTION.test(r.sortie)) {
+    const question = lignes.slice(-3).join('\n').trim();
+    const cq = lireConv(p.id); cq.demandeProd = null; cq.questionProd = { question, quand: new Date().toISOString(), message: messageCommit || null };
+    systeme(cq, 'Le script de mise en ligne pose une question avant de continuer. Rien n\'a été envoyé.'); ecrireConv(p.id, cq);
+    S.journal(p.nom, 'mise en prod en attente d\'une réponse du propriétaire');
+    return { ok: false, message: `Le script de mise en ligne pose une question, rien n'a été envoyé :\n${question}\n\nLa question est affichée chez le propriétaire avec des boutons Oui / Non. Dis-lui d'y répondre ; ne relance pas la mise en ligne toi-même.` };
+  }
   const ok = r.code === 0;
   S.journal(p.nom, ok ? 'mise en prod terminée' : `mise en prod en échec (code ${r.code})`, ok ? 'info' : 'erreur');
   let verif = '';
@@ -317,7 +333,7 @@ async function deployerVraiment(p, verifierApres, messageCommit) {
   const message = avant + (ok ? 'Mise en prod terminée.' : `Mise en prod en échec (code ${r.code}).`) +
     (envoyes ? ` Fichiers envoyés : ${envoyes.join(', ')}.` : (n ? ` Attention : ${n} fichier${n > 1 ? 's' : ''} non commité${n > 1 ? 's' : ''} du dossier sont partis avec.` : '')) +
     `\n\nFin de la sortie de « ${p.deploy} » :\n${fin}` + (verif ? '\n\nVérification après mise en ligne :\n' + verif : '');
-  const cc = lireConv(p.id); cc.demandeProd = null;
+  const cc = lireConv(p.id); cc.demandeProd = null; cc.questionProd = null;
   if (ok) cc.aDeployerDepuis = null;
   systeme(cc, ok ? 'Mis en ligne.' + (verif ? ' ' + verif.replace(/\n/g, ' ') : '') : `La mise en ligne a échoué (code ${r.code}) :\n${fin.split('\n').slice(-8).join('\n')}`);
   ecrireConv(p.id, cc);
@@ -357,6 +373,6 @@ function arreter(id) {
   return { ok: !!e };
 }
 
-function annulerProd(id) { const c = lireConv(id); if (c.demandeProd) { c.demandeProd = null; systeme(c, 'Mise en ligne annulée.'); ecrireConv(id, c); } return { ok: true }; }
+function annulerProd(id) { const c = lireConv(id); if (c.demandeProd || c.questionProd) { c.demandeProd = null; c.questionProd = null; systeme(c, 'Mise en ligne annulée.'); ecrireConv(id, c); } return { ok: true }; }
 
 module.exports = { etat, envoyer, garder, deployer, jeter, nouvelle, arreter, jetonValide, annulerProd, enCours };

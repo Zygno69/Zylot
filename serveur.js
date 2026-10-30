@@ -137,6 +137,18 @@ async function verifierApresMiseEnLigne(p) {
     (c ? `\nContrôle de sécurité refait : ${c.points.length ? c.points.map(x => x.titre).join(' ; ') : 'plus rien à signaler'}.` : '');
 }
 
+// Mise en ligne lancée par un bouton : à la fin, Zylot prévient Claude, qui vérifie et rend compte au propriétaire.
+function lancerMiseEnLigne(p, reponse) {
+  conversation.deployer(p, () => verifierApresMiseEnLigne(p), null, { confirme: true, reponse })
+    .then(async r => {
+      if (r.erreur && !r.message) r.message = r.erreur;
+      if (/pose une question/.test(r.message || '')) return;
+      await conversation.envoyer(p, `La mise en ligne lancée par le propriétaire est terminée. Compte rendu de Zylot :\n${r.message}\n\nVérifie toi-même sur le site (curl) que ce qui devait partir est bien en ligne, puis dis-lui en deux ou trois phrases ce que tu constates.`,
+        await contexteProjet(p), { role: 'zylot' });
+    })
+    .catch(e => console.error('mise en ligne', e));
+}
+
 function lancerAudit(ids) {
   const enfant = spawn(process.execPath, [path.join(S.RACINE, 'nuit.js'), ...ids], {
     cwd: S.RACINE, detached: true, stdio: 'ignore', env: process.env,
@@ -154,7 +166,7 @@ http.createServer(async (req, res) => {
     return fs.createReadStream(path.join(S.RACINE, 'interface', 'index.html')).pipe(res);
   }
   if (req.method === 'GET' && url.pathname === '/api/etat') return json(res, 200, await etat());
-  const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter|nouvelle|deployer|annulerprod))?$/);
+  const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter|nouvelle|deployer|annulerprod|repondreprod))?$/);
   const projetConv = mc && S.projets().find(p => p.id === mc[1]);
   if (mc && !projetConv) return json(res, 404, { erreur: 'Projet inconnu' });
   if (mc && req.method === 'GET' && !mc[2]) return json(res, 200, { ...conversation.etat(projetConv.id), suggestions: await suggestionsProjet(projetConv) });
@@ -197,7 +209,14 @@ http.createServer(async (req, res) => {
     }
     if (mc && mc[2] === 'deployer') {
       if (conversation.enCours.has(projetConv.id)) return json(res, 409, { erreur: 'Claude travaille encore : attendez qu\'il ait fini.' });
-      conversation.deployer(projetConv, () => verifierApresMiseEnLigne(projetConv), null, { confirme: true }).catch(e => console.error('deployer', e));
+      lancerMiseEnLigne(projetConv, '');
+      return json(res, 202, { ok: true });
+    }
+    if (mc && mc[2] === 'repondreprod') {
+      const { reponse } = await corps(req);
+      if (reponse !== 'oui') return json(res, 200, conversation.annulerProd(projetConv.id));
+      if (conversation.enCours.has(projetConv.id)) return json(res, 409, { erreur: 'Claude travaille encore : attendez qu\'il ait fini.' });
+      lancerMiseEnLigne(projetConv, 'o\n');
       return json(res, 202, { ok: true });
     }
     if (mc && mc[2] === 'annulerprod') return json(res, 200, conversation.annulerProd(projetConv.id));

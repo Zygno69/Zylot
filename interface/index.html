@@ -554,6 +554,7 @@ async function chargerConv(choisirVolet){
   const html = (c.messages.length ? c.messages.map((m,i)=>{
     if(m.role==='systeme') return `<div class="msg systeme">${esc(m.texte)}</div>`;
     if(m.role==='vous') return `<div class="msg vous">${esc(m.texte)}</div>`;
+    if(m.role==='zylot') return `<div class="msg systeme">Zylot a transmis le compte rendu de la mise en ligne à Claude.</div>`;
     return `<div class="msg claude">${rendreBlocs(m, c.enCours && i===c.messages.length-1)}</div>`;
   }).join('') : (c.suggestions?.length ? `<div class="suggestions"><b>Ce que je vous propose sur ce projet</b>${c.suggestions.slice(0,6).map((x,i)=>`
       <div class="sugg"><span class="pill p-${esc(x.gravite)}">${GRAV[x.gravite]}</span><div style="min-width:0"><b>${esc(x.titre)}</b><br><span class="muted" style="font-size:12.5px">${esc(x.detail)}</span></div><button type="button" class="btn small primary" data-sugg="${i}">Vas-y</button></div>`).join('')}
@@ -561,6 +562,9 @@ async function chargerConv(choisirVolet){
     : `<div class="msg systeme" style="margin-top:20px">Posez une question, demandez une correction ou une nouveauté.</div>`))
   + (c.enCours ? '<div class="row"><button type="button" class="btn small" data-conv-arreter>Arrêter</button></div>' : '')
   + (c.prodEnCours ? '<div class="modif"><div class="attente"><i></i>Mise en ligne en cours… ça peut prendre quelques minutes.</div></div>' : '')
+  + (c.questionProd && !c.prodEnCours && !c.enCours ? `<div class="modif"><b>Le script de mise en ligne vous pose une question</b>
+      <pre class="files" style="white-space:pre-wrap">${esc(c.questionProd.question)}</pre>
+      <div class="row"><button type="button" class="btn small primary" data-conv-repondre="oui">Oui, continuer</button><button type="button" class="btn small" data-conv-repondre="non">Non, annuler</button></div></div>` : '')
   + (c.demandeProd && !c.prodEnCours && !c.enCours ? (()=>{ const pp = D.projets.find(x=>x.id===projetOuvert), n = pp?.depot?.nonCommites||0;
       return `<div class="modif"><b>Claude propose de mettre ${esc(pp?.nom||'')} en ligne</b>
       ${n?`<span style="font-size:12.5px" class="t-orange">Attention : ${n} fichier${n>1?'s':''} modifié${n>1?'s':''} et non commité${n>1?'s':''} de votre dossier partiront aussi.</span>`:''}
@@ -640,6 +644,8 @@ document.addEventListener('click', async e=>{
   if(b.dataset.sugg!==undefined){ const x = suggestionsOuvertes[+b.dataset.sugg]; $('#convTexte').value = `Vas-y : ${x.titre}. (${x.detail})`; return envoyerConv(); }
   if(b.dataset.convProd!==undefined){ if(!await deuxClics(b,'Confirmer la mise en ligne')) return;
     try{ await api('/api/conversation/'+projetOuvert+'/deployer',{}); convVue=''; chargerConv(); }catch(err){ toast(err.message); } return; }
+  if(b.dataset.convRepondre){ if(b.dataset.convRepondre==='oui' && !await deuxClics(b,'Confirmer : continuer la mise en ligne')) return;
+    try{ await api('/api/conversation/'+projetOuvert+'/repondreprod',{reponse:b.dataset.convRepondre}); convVue=''; chargerConv(); }catch(err){ toast(err.message); } return; }
   if(b.dataset.convAnnulerprod!==undefined){ await api('/api/conversation/'+projetOuvert+'/annulerprod',{}).catch(()=>{}); convVue=''; chargerConv(); return; }
   if(b.dataset.convNouvelle!==undefined){ if(!await deuxClics(b,'Confirmer : tout effacer')) return;
     try{ await api('/api/conversation/'+projetOuvert+'/nouvelle',{}); convVue=''; chargerConv(); }catch(err){ toast(err.message); } return; }
