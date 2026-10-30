@@ -127,7 +127,7 @@ http.createServer(async (req, res) => {
     return fs.createReadStream(path.join(S.RACINE, 'interface', 'index.html')).pipe(res);
   }
   if (req.method === 'GET' && url.pathname === '/api/etat') return json(res, 200, await etat());
-  const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter|nouvelle))?$/);
+  const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter|nouvelle|deployer|annulerprod))?$/);
   const projetConv = mc && S.projets().find(p => p.id === mc[1]);
   if (mc && !projetConv) return json(res, 404, { erreur: 'Projet inconnu' });
   if (mc && req.method === 'GET' && !mc[2]) return json(res, 200, conversation.etat(projetConv.id));
@@ -168,6 +168,12 @@ http.createServer(async (req, res) => {
       const r = await conversation.envoyer(projetConv, String(texte).slice(0, 8000), await contexteProjet(projetConv));
       return json(res, r.erreur ? 409 : 202, r);
     }
+    if (mc && mc[2] === 'deployer') {
+      if (conversation.enCours.has(projetConv.id)) return json(res, 409, { erreur: 'Claude travaille encore : attendez qu\'il ait fini.' });
+      conversation.deployer(projetConv, () => verifierApresMiseEnLigne(projetConv), null, { confirme: true }).catch(e => console.error('deployer', e));
+      return json(res, 202, { ok: true });
+    }
+    if (mc && mc[2] === 'annulerprod') return json(res, 200, conversation.annulerProd(projetConv.id));
     if (mc && mc[2] === 'nouvelle') { const r = await conversation.nouvelle(projetConv); return json(res, r.erreur ? 409 : 200, r); }
     if (mc && mc[2] === 'garder') { const r = await conversation.garder(projetConv); return json(res, r.erreur ? 409 : 200, r); }
     if (mc && mc[2] === 'jeter') { const r = await conversation.jeter(projetConv); return json(res, r.erreur ? 409 : 200, r); }

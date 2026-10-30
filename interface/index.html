@@ -554,6 +554,11 @@ async function chargerConv(choisirVolet){
     return `<div class="msg claude">${rendreBlocs(m, c.enCours && i===c.messages.length-1)}</div>`;
   }).join('') : `<div class="msg systeme" style="margin-top:20px">Posez une question, demandez une correction ou une nouveauté. Claude lit le projet, vous propose, et agit quand vous lui dites « vas-y ».</div>`)
   + (c.enCours ? '<div class="row"><button type="button" class="btn small" data-conv-arreter>Arrêter</button></div>' : '')
+  + (c.prodEnCours ? '<div class="modif"><div class="attente"><i></i>Mise en ligne en cours… ça peut prendre quelques minutes.</div></div>' : '')
+  + (c.demandeProd && !c.prodEnCours && !c.enCours ? (()=>{ const pp = D.projets.find(x=>x.id===projetOuvert), n = pp?.depot?.nonCommites||0;
+      return `<div class="modif"><b>Claude propose de mettre ${esc(pp?.nom||'')} en ligne</b>
+      ${n?`<span style="font-size:12.5px" class="t-orange">Attention : ${n} fichier${n>1?'s':''} modifié${n>1?'s':''} et non commité${n>1?'s':''} de votre dossier partiront aussi.</span>`:''}
+      <div class="row"><button type="button" class="btn small primary" data-conv-prod>Mettre en ligne</button><button type="button" class="btn small" data-conv-annulerprod>Non</button></div></div>`; })() : '')
   + (c.modif && !c.enCours ? `<div class="modif">
       <b>Modifications prêtes dans la copie de Claude</b>
       <span style="font-size:12.5px">${esc(c.modif.resume)}</span>
@@ -568,7 +573,7 @@ async function chargerConv(choisirVolet){
     if(enBas) defile.scrollTop = defile.scrollHeight;
   }
   const b = $('[data-conv-envoyer]'); if(b) b.disabled = c.enCours;
-  if(c.enCours) convTimer = setTimeout(chargerConv, 700);
+  if(c.enCours || c.prodEnCours) convTimer = setTimeout(chargerConv, c.enCours ? 700 : 2000);
 }
 async function envoyerConv(){
   const t = $('#convTexte'), texte = t.value.trim();
@@ -626,6 +631,9 @@ document.addEventListener('click', async e=>{
     t.value = `${x.t} : ${x.d}\nQu'est-ce que tu proposes ?`; t.focus(); return;
   }
   if(b.dataset.convEnvoyer!==undefined) return envoyerConv();
+  if(b.dataset.convProd!==undefined){ if(!await deuxClics(b,'Confirmer la mise en ligne')) return;
+    try{ await api('/api/conversation/'+projetOuvert+'/deployer',{}); convVue=''; chargerConv(); }catch(err){ toast(err.message); } return; }
+  if(b.dataset.convAnnulerprod!==undefined){ await api('/api/conversation/'+projetOuvert+'/annulerprod',{}).catch(()=>{}); convVue=''; chargerConv(); return; }
   if(b.dataset.convNouvelle!==undefined){ if(!await deuxClics(b,'Confirmer : tout effacer')) return;
     try{ await api('/api/conversation/'+projetOuvert+'/nouvelle',{}); convVue=''; chargerConv(); }catch(err){ toast(err.message); } return; }
   if(b.dataset.convArreter!==undefined){ await api('/api/conversation/'+projetOuvert+'/arreter',{}).catch(()=>{}); toast('Claude arrêté'); return; }

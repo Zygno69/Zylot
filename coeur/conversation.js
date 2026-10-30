@@ -15,6 +15,9 @@ fs.mkdirSync(CONV, { recursive: true });
 fs.mkdirSync(ATELIERS, { recursive: true });
 
 const enCours = new Map(); // projet → { enfant, jeton }
+const prodEnCours = new Set();
+// À augmenter quand les consignes changent : les conversations repartent alors sur une session neuve, avec un résumé.
+const VERSION_CONSIGNES = 3;
 
 // Ce que Claude peut faire seul, dans sa copie. Tout le reste est refusé sans lui demander.
 const AUTORISE = [
@@ -23,7 +26,7 @@ const AUTORISE = [
   'Bash(ls:*)', 'Bash(cat:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(grep:*)', 'Bash(sort:*)', 'Bash(uniq:*)',
   'Bash(curl -s:*)', 'Bash(curl -I:*)', 'Bash(curl -sI:*)', 'Bash(curl -sIL:*)', 'Bash(curl -s -I:*)',
   'Bash(php -l:*)', 'Bash(node --check:*)', 'Bash(npm run build:*)', 'Bash(npm run lint:*)', 'Bash(npm test:*)', 'Bash(npx eslint:*)',
-  'Bash(zylot garder:*)', 'Bash(zylot deployer)', 'Bash(zylot etat)',
+  'Bash(zylot garder:*)', 'Bash(zylot deployer:*)', 'Bash(zylot etat)',
 ];
 const INTERDIT = ['Agent', 'Task', 'WebSearch', 'Bash(git push:*)', 'Bash(git remote:*)', 'Bash(git commit:*)', 'Bash(git checkout:*)', 'Bash(git reset:*)', 'Bash(rm:*)', 'NotebookEdit'];
 
@@ -40,7 +43,7 @@ function lireConv(id) { return S.lire(fichier(id), { messages: [], sessionId: nu
 function ecrireConv(id, c) { S.ecrire(fichier(id), c); }
 function systeme(c, texte) { c.messages.push({ role: 'systeme', texte, quand: new Date().toISOString() }); }
 
-function etat(id) { return { ...lireConv(id), enCours: enCours.has(id) }; }
+function etat(id) { return { ...lireConv(id), enCours: enCours.has(id), prodEnCours: prodEnCours.has(id) }; }
 
 // La copie de travail : créée au besoin, à partir du dernier commit du projet.
 async function preparerAtelier(p, c) {
@@ -73,7 +76,7 @@ Comment tu travailles :
 - Pour une demande claire et sans risque, fais-la directement. Pour quelque chose d'important ou d'ambigu, propose d'abord en deux ou trois phrases et attends son accord (« vas-y », « ok »…).
 - Commandes Zylot (outil Bash) :
   · \`zylot garder "Message de commit"\` : intègre tes modifications dans le vrai projet, avec un message de commit que tu écris (une ligne claire qui dit ce qui a été fait, en français). Seulement quand il est d'accord.
-  · \`zylot deployer\` : garde tes modifications si besoin, puis met en ligne avec la commande de déploiement du projet et vérifie le site. Seulement quand SON DERNIER MESSAGE demande la mise en prod ; Zylot refuse sinon. Prévois que ça peut prendre plusieurs minutes.
+  · \`zylot deployer "Message de commit"\` : garde tes modifications si besoin, puis met en ligne avec la commande de déploiement du projet et vérifie le site. Tu as le droit de le faire dès qu'il te le demande, avec ses mots à lui (« déploie », « mets en ligne », « fais-le toi »…). Si sa demande n'est pas assez explicite pour Zylot, un bouton « Mettre en ligne » s'affiche chez lui : dis-lui simplement de cliquer. Ça peut prendre plusieurs minutes.
   · \`zylot etat\` : l'état actuel du site et du dépôt vu par Zylot.
 - Quand une mise en prod serait utile, propose-la simplement (« je la mets en ligne ? ») : s'il répond « déploie » ou « mets en ligne », tu lances \`zylot deployer\`. Préviens-le avant si des fichiers non commités de son dossier partiraient avec.
 - Pour vérifier le site en ligne, utilise \`curl -sI\` (ou WebFetch sur le site du projet).
@@ -106,6 +109,15 @@ async function envoyer(p, texte, contexte) {
   const c = lireConv(p.id);
   const souci = await preparerAtelier(p, c);
   if (souci) return { erreur: souci };
+  // Consignes changées depuis le début de la session : on repart à neuf, en rappelant à Claude où on en était.
+  let rappel = '';
+  if (c.sessionId && c.version !== VERSION_CONSIGNES) {
+    const derniers = c.messages.filter(m => m.role !== 'systeme').slice(-6).map(m => (m.role === 'vous' ? 'Le propriétaire : ' : 'Toi : ') +
+      (m.texte || (m.blocs || []).filter(b => b.type === 'texte').map(b => b.t).join(' ')).replace(/\s+/g, ' ').slice(0, 500));
+    rappel = 'Pour mémoire, la fin de la conversation jusqu\'ici (tes règles ont changé depuis : seules celles de maintenant comptent) :\n' + derniers.join('\n') + '\n\nNouveau message :\n';
+    c.sessionId = null;
+  }
+  c.version = VERSION_CONSIGNES;
   c.messages.push({ role: 'vous', texte, quand: new Date().toISOString() });
   const reponse = { role: 'claude', blocs: [], quand: new Date().toISOString() };
   c.messages.push(reponse);
@@ -194,7 +206,7 @@ async function envoyer(p, texte, contexte) {
     ecrireConv(p.id, cc);
   });
   enfant.on('error', e => { enCours.delete(p.id); reponse.erreur = 'Claude Code introuvable : ' + e.message; reponse.fini = true; sauver(true); });
-  enfant.stdin.end(texte);
+  enfant.stdin.end(rappel + texte);
   return { ok: true };
 }
 
@@ -257,11 +269,22 @@ function executer(commande, dossier, delai) {
 }
 
 // Mise en prod demandée par le propriétaire : garder si besoin, lancer la commande de déploiement du projet, vérifier le site.
-async function deployer(p, verifierApres, messageCommit) {
+async function deployer(p, verifierApres, messageCommit, { confirme = false } = {}) {
   if (!p.deploy) return { erreur: `Aucune commande de déploiement n'est configurée pour ${p.nom} dans projets.json (champ « deploy »).` };
   const c = lireConv(p.id);
   const dernier = [...c.messages].reverse().find(m => m.role === 'vous');
-  if (!dernier || !DEMANDE_PROD.test(dernier.texte)) return { erreur: 'Refusé : le dernier message du propriétaire ne demande pas de mise en prod. Demande-lui de le confirmer.' };
+  if (!confirme && (!dernier || !DEMANDE_PROD.test(dernier.texte))) {
+    c.demandeProd = { quand: new Date().toISOString(), message: messageCommit || null };
+    ecrireConv(p.id, c);
+    return { ok: true, message: 'Confirmation demandée : un bouton « Mettre en ligne » est affiché dans la conversation du propriétaire. Dis-lui de cliquer dessus ; la mise en ligne se fera à ce moment-là.' };
+  }
+  if (prodEnCours.has(p.id)) return { erreur: 'Une mise en prod est déjà en cours.' };
+  prodEnCours.add(p.id);
+  try { return await deployerVraiment(p, verifierApres, messageCommit || (c.demandeProd && c.demandeProd.message)); }
+  finally { prodEnCours.delete(p.id); }
+}
+
+async function deployerVraiment(p, verifierApres, messageCommit) {
   let avant = '';
   const g = await garder(p, messageCommit);
   if (g.erreur) return g;
@@ -278,7 +301,9 @@ async function deployer(p, verifierApres, messageCommit) {
   const message = avant + (ok ? 'Mise en prod terminée.' : `Mise en prod en échec (code ${r.code}).`) +
     (n ? ` Attention : ${n} fichier${n > 1 ? 's' : ''} non commité${n > 1 ? 's' : ''} du dossier sont partis avec.` : '') +
     `\n\nFin de la sortie de « ${p.deploy} » :\n${fin}` + (verif ? '\n\nVérification après mise en ligne :\n' + verif : '');
-  const cc = lireConv(p.id); systeme(cc, ok ? 'Mis en prod.' + (verif ? ' ' + verif.split('\n')[0] : '') : 'La mise en prod a échoué.'); ecrireConv(p.id, cc);
+  const cc = lireConv(p.id); cc.demandeProd = null;
+  systeme(cc, ok ? 'Mis en ligne.' + (verif ? ' ' + verif.replace(/\n/g, ' ') : '') : `La mise en ligne a échoué (code ${r.code}) :\n${fin.split('\n').slice(-8).join('\n')}`);
+  ecrireConv(p.id, cc);
   return { ok, message };
 }
 
@@ -315,4 +340,6 @@ function arreter(id) {
   return { ok: !!e };
 }
 
-module.exports = { etat, envoyer, garder, deployer, jeter, nouvelle, arreter, jetonValide };
+function annulerProd(id) { const c = lireConv(id); if (c.demandeProd) { c.demandeProd = null; systeme(c, 'Mise en ligne annulée.'); ecrireConv(id, c); } return { ok: true }; }
+
+module.exports = { etat, envoyer, garder, deployer, jeter, nouvelle, arreter, jetonValide, annulerProd, enCours };
