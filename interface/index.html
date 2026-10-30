@@ -268,7 +268,7 @@ function aRegarder(p){
   if(dep?.git){
     if(!dep.dernierCommit) l.push({g:'securite', t:'Aucun commit dans le dépôt', d:`Le dossier a un dépôt git, mais rien n'y a jamais été enregistré${dep.nonCommites?` (${pl(dep.nonCommites,'fichier')} en attente)`:''}. Le code n'est sauvegardé nulle part ailleurs que sur ce Mac.`});
     else if(dep.nonPousses>0) l.push({g:'info', t:`${pl(dep.nonPousses,'commit')} pas sur GitHub`, d:`Ce travail n'existe que sur ce Mac. Un git push le met à l'abri.`});
-    if(dep.dernierCommit && dep.nonCommites>0) l.push({g:'info', t:`${pl(dep.nonCommites,'fichier modifié')} non commité${dep.nonCommites>1?'s':''}`, d:'Des modifications en cours, pas encore enregistrées dans git.'});
+    if(dep.dernierCommit && dep.nonCommites>0) l.push({g:'info', t:`${pl(dep.nonCommites,'fichier modifié','fichiers modifiés')} non commité${dep.nonCommites>1?'s':''}`, d:'Des modifications en cours, pas encore enregistrées dans git.'});
   } else if(p.depot && !p.depot.git) l.push({g:'info', t:'Pas de dépôt git', d:'Aucun historique ni sauvegarde du code.'});
   for(const a of D.alertes.filter(a=>a.projet===p.id)) l.push({g:a.gravite, t:a.titre, d:a.detail, alerte:a.id});
   return l;
