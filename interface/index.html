@@ -166,6 +166,8 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
 .piece button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);font-size:13px;line-height:20px;padding:0}
 .msg .capture{display:block;max-width:100%;max-height:260px;border-radius:8px;margin-bottom:6px}
 .convpane.depot .messages{outline:2px dashed var(--accent);outline-offset:-8px}
+.acorriger{display:flex;flex-direction:column;gap:10px;border:1px solid var(--warn);background:var(--warn-bg);border-radius:12px;padding:14px}
+.acorriger .sugg{border-top-color:color-mix(in srgb, var(--warn) 30%, transparent)}
 .suggestions{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:12px;padding:14px}
 .sugg{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding-top:10px;border-top:1px solid var(--line)}
 .msg{font-size:14px;line-height:1.55;overflow-wrap:anywhere}
@@ -474,6 +476,7 @@ function rendre(){
     const ouvrir = (v, t='Ouvrir') => `<button type="button" class="btn small" data-aller-volet="${id}|${v}">${t}</button>`;
     if(c.enCours) actions.push({o:3, s:'decision', t:'Claude travaille', p:nom, b:ouvrir('conv','Suivre')});
     if(c.modif) actions.push({o:1, s:'decision', t:'Une modification de Claude attend votre décision', p:nom, b:ouvrir('conv','Voir')});
+    if(p.aCorriger?.length) actions.push({o:1, s:p.aCorriger.some(x=>x.gravite==='urgent')?'urgent':'securite', t:`${pl(p.aCorriger.length,'point')} à corriger`, p:nom, b:ouvrir('conv','Voir')});
     if(c.demande) actions.push({o:1, s:'decision', t:'Claude propose de mettre en ligne', p:nom, b:ouvrir('conv','Voir')});
     if(c.attenteEnLigne) actions.push({o:4, s:'route', t:'Envoyé : mise en ligne en cours', p:nom, b:ouvrir('prod','Suivre')});
     // En CI/CD, ce qui n'est pas sur GitHub n'est pas en ligne non plus : c'est à publier.
@@ -660,6 +663,7 @@ function ouvrir(html){ const d=$('#drawer'); d.className='drawer'; d.innerHTML='
 function fermer(){ $('#scrim').hidden=true; }
 
 // ---------- Navigation : vue d'ensemble ou page d'un site (#site-<id>) ----------
+let pointsACorriger = [];
 let projetOuvert = null, pointsOuverts = [], suggestionsOuvertes = [], convTimer = null, convVue = '', volet = 'conv', detail = null;
 function aller(id, v){ if(v) volet = v; location.hash = id ? 'site-' + id : ''; if(!id) afficher(); }
 window.addEventListener('hashchange', afficher);
@@ -677,6 +681,7 @@ function signesNav(p){
   const c = p.conversation || {}, out = [];
   if(c.enCours || c.prodEnCours) out.push('<span class="tourne" title="Claude travaille"></span>');
   if(c.modif || c.demande) out.push('<span class="signe sg-valider" title="Attend votre décision">à valider</span>');
+  if(p.aCorriger?.length) out.push(`<span class="signe sg-valider" title="Points à corriger">${p.aCorriger.length} à corriger</span>`);
   if(c.attenteEnLigne) out.push('<span class="signe sg-enroute" title="Envoyé, en cours de mise en ligne">en route</span>');
   else if(p.aMettreEnLigne > 0) out.push(`<span class="signe sg-prod" title="Commits pas encore en ligne">${p.aMettreEnLigne} à publier</span>`);
   return out.join('');
@@ -868,7 +873,7 @@ async function chargerConv(choisirVolet){
   if(!projetOuvert || $('#v-conv')?.hidden) return;
   let c; try{ c = await api('/api/conversation/'+projetOuvert); }catch{ return; }
   const zone = $('#conv'), defile = $('#messages'); if(!zone) return;
-  suggestionsOuvertes = c.suggestions || [];
+  suggestionsOuvertes = c.suggestions || []; pointsACorriger = c.aCorriger || [];
   const aParle = c.messages.some(m=>m.role==='vous');
   const html = (c.messages.length ? c.messages.map((m,i)=>{
     if(m.role==='systeme') return `<div class="msg systeme">${esc(m.texte)}</div>`;
@@ -879,6 +884,9 @@ async function chargerConv(choisirVolet){
       <div class="sugg"><span class="pill p-${esc(x.gravite)}">${GRAV[x.gravite]}</span><div style="min-width:0"><b>${esc(x.titre)}</b><br><span class="muted" style="font-size:12.5px">${esc(x.detail)}</span></div><button type="button" class="btn small primary" data-sugg="${i}">Vas-y</button></div>`).join('')}
       <span class="muted" style="font-size:12.5px">Ou écrivez ce que vous voulez ci-dessous. « Fais-le » tout court : je prends la première.</span></div>`
     : (c.messages.length ? '' : `<div class="msg systeme" style="margin-top:20px">Posez une question, demandez une correction ou une nouveauté.</div>`)))
+  + (c.aCorriger?.length ? `<div class="acorriger"><b>Points à corriger (${c.aCorriger.length})</b>${c.aCorriger.map(x=>`
+      <div class="sugg"><span class="pill p-${esc(x.gravite)}">${GRAV[x.gravite]||''}</span><div style="min-width:0"><b>${esc(x.titre)}</b><br><span class="muted" style="font-size:12.5px">${esc(x.detail)}</span>${x.vous?`<br><span class="t-orange" style="font-size:12.5px">À faire par vous : ${esc(x.vous)}</span>`:''}</div>
+      <span class="row" style="gap:4px;justify-content:flex-end"><button type="button" class="btn small primary" data-point-vasy="${esc(x.id)}" ${c.enCours?'disabled':''}>Vas-y</button><button type="button" class="btn small" data-point-clore="${esc(x.id)}|fait">Fait</button><button type="button" class="btn small" data-point-clore="${esc(x.id)}|ignore">Ignorer</button></span></div>`).join('')}</div>` : '')
   + (c.enCours ? '<div class="row"><button type="button" class="btn small" data-conv-arreter>Arrêter</button></div>' : '')
   + (c.prodEnCours ? '<div class="modif"><div class="attente"><i></i>Mise en ligne en cours… ça peut prendre quelques minutes.</div></div>' : '')
   + (c.questionProd && !c.prodEnCours && !c.enCours ? `<div class="modif"><b>Le script de mise en ligne vous pose une question</b>
@@ -998,6 +1006,10 @@ document.addEventListener('click', async e=>{
     t.value = `${x.t} : ${x.d}\nQu'est-ce que tu proposes ?`; t.focus(); return;
   }
   if(b.dataset.convEnvoyer!==undefined) return envoyerConv();
+  if(b.dataset.pointVasy){ const x = pointsACorriger.find(p=>p.id===b.dataset.pointVasy); if(!x) return;
+    $('#convTexte').value = `Vas-y : ${x.titre}. ${x.detail}${x.vous?` (Ce que je dois faire moi-même : ${x.vous} — dis-le-moi au bon moment.)`:''}`; return envoyerConv(); }
+  if(b.dataset.pointClore){ const [pid, quoi] = b.dataset.pointClore.split('|'); if(!await deuxClics(b, quoi==='fait'?'Confirmer : corrigé':'Confirmer : ignorer')) return;
+    try{ await api('/api/conversation/'+projetOuvert+'/point/'+pid+'/'+quoi,{}); convVue=''; chargerConv(); charger(); }catch(err){ toast(err.message); } return; }
   if(b.dataset.convJoindre!==undefined) return $('#convFichier').click();
   if(b.dataset.retirerPiece!==undefined){ const x = pieces.splice(+b.dataset.retirerPiece,1)[0]; if(x) URL.revokeObjectURL(x.url); return rendrePieces(); }
   if(b.dataset.sugg!==undefined){ const x = suggestionsOuvertes[+b.dataset.sugg]; $('#convTexte').value = `Vas-y : ${x.titre}. (${x.detail})`; return envoyerConv(); }

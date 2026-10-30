@@ -12,6 +12,7 @@ const depots = require('./coeur/depots');
 const conversation = require('./coeur/conversation');
 const logos = require('./coeur/logos');
 const usage = require('./coeur/usage');
+const acorriger = require('./coeur/acorriger');
 const { prevenir } = require('./coeur/prevenir');
 
 const { port } = S.config();
@@ -97,6 +98,7 @@ async function etat() {
       depot: dep[p.id] || null,
       surveillance: surv,
       securite: controle,
+      aCorriger: acorriger.ouverts(p.id).map(x => ({ titre: x.titre, gravite: x.gravite })),
       version: surv && surv.etat ? surv.etat.version || null : null,
       usage: (u => u && { releve: u.releve, erreur: u.erreur, principaux: u.indicateurs.filter(x => x.principal).slice(0, 3) })(p.stats ? usage.dernier(p.id) : null),
       modeProd: p.ci === 'github' ? 'github' : p.deploy ? 'script' : null,
@@ -123,6 +125,7 @@ async function etat() {
 async function suggestionsProjet(p) {
   const l = [];
   const ajout = (gravite, titre, detail) => l.push({ gravite, titre, detail });
+  for (const x of acorriger.ouverts(p.id)) l.push({ gravite: x.gravite, titre: x.titre, detail: x.detail + (x.vous ? ' (À faire par le propriétaire : ' + x.vous + ')' : ''), point: x.id });
   const e = p.site ? surveillance.resume(p.id).etat : null;
   if (e && e.enPanne) ajout('urgent', 'Remettre le site en ligne', `${p.site} ne répond plus : ${e.erreur || 'code ' + e.code}.`);
   if (e && e.cert && e.cert.jours < 30) ajout(e.cert.jours < 14 ? 'urgent' : 'securite', 'Renouveler le certificat', `Il expire dans ${e.cert.jours} jours.`);
@@ -258,7 +261,7 @@ async function traiter(req, res) {
     res.writeHead(200, { 'Content-Type': { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' }[mi[3]], 'Cache-Control': 'private, max-age=86400' });
     return fs.createReadStream(f).pipe(res);
   }
-  if (mc && req.method === 'GET' && !mc[2]) return json(res, 200, { ...conversation.etat(projetConv.id), suggestions: await suggestionsProjet(projetConv) });
+  if (mc && req.method === 'GET' && !mc[2]) return json(res, 200, { ...conversation.etat(projetConv.id), suggestions: await suggestionsProjet(projetConv), aCorriger: acorriger.ouverts(projetConv.id) });
 
   // Appels de la commande `zylot`, lancée par Claude pendant une conversation.
   const ma = url.pathname.match(/^\/api\/agent\/([a-z0-9-]+)\/(garder|commiter|deployer|pousser|etat)$/);
@@ -316,6 +319,14 @@ async function traiter(req, res) {
       return json(res, 202, { ok: true });
     }
     if (mc && mc[2] === 'annulerprod') return json(res, 200, conversation.annulerProd(projetConv.id));
+    const mp = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)\/point\/([a-f0-9]+)\/(fait|ignore)$/);
+    if (mp) {
+      const p = S.projets().find(x => x.id === mp[1]);
+      const x = p && acorriger.clore(p.id, mp[2], mp[3]);
+      if (!x) return json(res, 404, { erreur: 'Point introuvable' });
+      S.journal(p.nom, `point ${mp[3] === 'fait' ? 'corrigé' : 'ignoré'} : ${x.titre}`);
+      return json(res, 200, { ok: true });
+    }
     if (mc && mc[2] === 'nouvelle') { const r = await conversation.nouvelle(projetConv); return json(res, r.erreur ? 409 : 200, r); }
     if (mc && mc[2] === 'garder') { const r = await conversation.garder(projetConv); return json(res, r.erreur ? 409 : 200, r); }
     if (mc && mc[2] === 'jeter') { const r = await conversation.jeter(projetConv); return json(res, r.erreur ? 409 : 200, r); }
