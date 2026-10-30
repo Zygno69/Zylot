@@ -85,6 +85,32 @@ async function etat() {
   return { projets, alertes, journal: S.lireJournal(40), enCours: S.verrou(), securiteEnCours, maintenant: new Date().toISOString() };
 }
 
+// Les suggestions de Zylot pour un projet, de la plus importante à la moins importante.
+// Ce sont elles que Claude reçoit, et que la conversation propose quand elle est vide.
+async function suggestionsProjet(p) {
+  const l = [];
+  const ajout = (gravite, titre, detail) => l.push({ gravite, titre, detail });
+  const e = p.site ? surveillance.resume(p.id).etat : null;
+  if (e && e.enPanne) ajout('urgent', 'Remettre le site en ligne', `${p.site} ne répond plus : ${e.erreur || 'code ' + e.code}.`);
+  if (e && e.cert && e.cert.jours < 30) ajout(e.cert.jours < 14 ? 'urgent' : 'securite', 'Renouveler le certificat', `Il expire dans ${e.cert.jours} jours.`);
+  const c = securite.derniers()[p.id];
+  for (const pt of (c && c.points) || []) {
+    if (pt.titre.startsWith('En-tête manquant')) continue;
+    ajout(pt.gravite, pt.titre.replace(/^Le serveur affiche ses versions$/, 'Masquer la version du serveur'), pt.detail);
+  }
+  const manquants = c && c.entetes ? Object.entries(c.entetes).filter(([, v]) => !v).map(([k]) => k) : [];
+  if (manquants.length) ajout('info', 'Ajouter les en-têtes de protection', `Manquants : ${manquants.join(', ')}. Quelques lignes dans le .htaccess.`);
+  for (const a of S.alertesOuvertes().filter(a => a.projet === p.id)) ajout(a.gravite, a.titre, a.detail);
+  const d = (await depots.tous([p]))[p.id] || {};
+  if (d.git && !d.dernierCommit) ajout('securite', 'Faire un premier commit et le pousser sur GitHub', 'Le code n\'existe que sur ce Mac et sur le serveur.');
+  if (d.nonPousses > 0) ajout('info', `Pousser ${d.nonPousses} commit${d.nonPousses > 1 ? 's' : ''} sur GitHub`, 'Ce travail n\'existe que sur ce Mac.');
+  if (d.dernierCommit && Date.now() - new Date(d.dernierCommit.quand) > 60 * 864e5) ajout('info', 'Faire le point sur ce projet endormi', 'Pas de commit depuis plus de deux mois : dépendances et sécurité à revoir s\'il est toujours en service.');
+  const r = S.dernierRapport(p.id);
+  for (const x of (r && r.propositions) || []) ajout('info', x.titre, x.detail);
+  const ordre = { urgent: 0, securite: 1, info: 2 };
+  return l.sort((a, b) => ordre[a.gravite] - ordre[b.gravite]);
+}
+
 // Ce que Zylot sait d'un projet, en quelques lignes, pour Claude.
 async function contexteProjet(p) {
   const surv = p.site ? surveillance.resume(p.id) : null, e = surv && surv.etat;
@@ -95,8 +121,9 @@ async function contexteProjet(p) {
   if (p.site) l.push(`- Site ${p.site} : ${e ? (e.ok ? `en ligne (${e.ms} ms)` : 'HORS LIGNE : ' + (e.erreur || 'code ' + e.code)) : 'pas encore testé'}${e && e.cert ? `, certificat valable ${e.cert.jours} jours` : ''}`);
   if (c) l.push(`- Contrôle de sécurité (${c.quand.slice(0, 10)}) : ${c.points.length ? c.points.map(x => x.titre).join(' ; ') : 'rien à signaler'}`);
   if (d.git) l.push(`- Git : dernier commit ${d.dernierCommit ? d.dernierCommit.quand.slice(0, 10) + ' « ' + d.dernierCommit.message + ' »' : 'aucun'}, ${d.nonCommites} fichier(s) non commité(s) dans le dossier, ${d.nonPousses == null ? 'pas de suivi GitHub' : d.nonPousses + ' commit(s) non poussé(s)'}`);
-  const al = S.alertesOuvertes().filter(a => a.projet === p.id);
-  if (al.length) l.push(`- Points de l'audit Claude : ${al.map(a => a.titre).join(' ; ')}`);
+  const sg = await suggestionsProjet(p);
+  l.push('', 'Suggestions affichées au propriétaire dans Zylot, de la plus importante à la moins importante :');
+  l.push(...(sg.length ? sg.map((x, i) => `${i + 1}. ${x.titre} — ${x.detail}`) : ['(aucune)']));
   return l.join('\n');
 }
 
@@ -130,7 +157,7 @@ http.createServer(async (req, res) => {
   const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter|nouvelle|deployer|annulerprod))?$/);
   const projetConv = mc && S.projets().find(p => p.id === mc[1]);
   if (mc && !projetConv) return json(res, 404, { erreur: 'Projet inconnu' });
-  if (mc && req.method === 'GET' && !mc[2]) return json(res, 200, conversation.etat(projetConv.id));
+  if (mc && req.method === 'GET' && !mc[2]) return json(res, 200, { ...conversation.etat(projetConv.id), suggestions: await suggestionsProjet(projetConv) });
 
   // Appels de la commande `zylot`, lancée par Claude pendant une conversation.
   const ma = url.pathname.match(/^\/api\/agent\/([a-z0-9-]+)\/(garder|deployer|etat)$/);

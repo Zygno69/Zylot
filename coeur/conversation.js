@@ -17,7 +17,7 @@ fs.mkdirSync(ATELIERS, { recursive: true });
 const enCours = new Map(); // projet → { enfant, jeton }
 const prodEnCours = new Set();
 // À augmenter quand les consignes changent : les conversations repartent alors sur une session neuve, avec un résumé.
-const VERSION_CONSIGNES = 3;
+const VERSION_CONSIGNES = 5;
 
 // Ce que Claude peut faire seul, dans sa copie. Tout le reste est refusé sans lui demander.
 const AUTORISE = [
@@ -73,12 +73,13 @@ function consigneSysteme(p, contexte) {
 
 Comment tu travailles :
 - Tu es dans une copie isolée du projet, sur une branche à toi. Tu peux y lire, modifier et construire librement : rien ne touche au vrai projet tant que le propriétaire n'a pas dit de garder.
+- Si le propriétaire dit « fais-le », « vas-y », « ok go »… sans autre précision et que rien dans la conversation ne dit de quoi il parle, il parle de la première des suggestions de Zylot ci-dessous : dis en une phrase laquelle tu prends, puis fais-la.
 - Pour une demande claire et sans risque, fais-la directement. Pour quelque chose d'important ou d'ambigu, propose d'abord en deux ou trois phrases et attends son accord (« vas-y », « ok »…).
 - Commandes Zylot (outil Bash) :
   · \`zylot garder "Message de commit"\` : intègre tes modifications dans le vrai projet, avec un message de commit que tu écris (une ligne claire qui dit ce qui a été fait, en français). Seulement quand il est d'accord.
   · \`zylot deployer "Message de commit"\` : garde tes modifications si besoin, puis met en ligne avec la commande de déploiement du projet et vérifie le site. Tu as le droit de le faire dès qu'il te le demande, avec ses mots à lui (« déploie », « mets en ligne », « fais-le toi »…). Si sa demande n'est pas assez explicite pour Zylot, un bouton « Mettre en ligne » s'affiche chez lui : dis-lui simplement de cliquer. Ça peut prendre plusieurs minutes.
   · \`zylot etat\` : l'état actuel du site et du dépôt vu par Zylot.
-- Quand une mise en prod serait utile, propose-la simplement (« je la mets en ligne ? ») : s'il répond « déploie » ou « mets en ligne », tu lances \`zylot deployer\`. Préviens-le avant si des fichiers non commités de son dossier partiraient avec.
+- Quand une mise en prod serait utile, propose-la simplement (« je la mets en ligne ? ») : s'il répond « déploie » ou « mets en ligne », tu lances \`zylot deployer\`. Préviens-le avant si des fichiers non commités de son dossier partiraient avec (sauf si la commande de mise en prod contient {fichiers} : seuls tes fichiers partent).
 - Pour vérifier le site en ligne, utilise \`curl -sI\` (ou WebFetch sur le site du projet).
 - Tu ne pousses jamais sur GitHub et tu ne commits pas toi-même : \`zylot garder\` s'en charge.
 - Si une commande t'est refusée, dis simplement ce dont tu avais besoin, sans chercher à contourner.
@@ -242,6 +243,7 @@ async function garder(p, messageCommit) {
   const r = await git(c.atelier.chemin, ['commit', '-m', `${titre}\n\nPréparé avec Zylot.\n\nCo-Authored-By: Claude <noreply@anthropic.com>`]);
   if (!r.ok) return { erreur: 'Commit impossible : ' + r.err };
   const principale = (await git(p.dossier, ['rev-parse', '--abbrev-ref', 'HEAD'])).out;
+  const avantFusion = (await git(p.dossier, ['rev-parse', 'HEAD'])).out;
   const fusion = await git(p.dossier, ['merge', '--ff-only', c.atelier.branche]);
   // La copie de travail reste en place (Claude est peut-être encore dedans) : sa branche est simplement à jour avec le projet.
   const branche = c.atelier.branche;
@@ -254,13 +256,17 @@ async function garder(p, messageCommit) {
     S.journal(p.nom, `modification enregistrée sur ${branche}, fusion à faire`);
   }
   const cc = lireConv(p.id);
-  cc.modif = null; systeme(cc, message); ecrireConv(p.id, cc);
+  cc.modif = null; systeme(cc, message);
+  // Le point de départ de ce qui n'est pas encore en ligne : sert aux projets qui déploient fichier par fichier.
+  if (fusion.ok && !cc.aDeployerDepuis) cc.aDeployerDepuis = avantFusion;
+  ecrireConv(p.id, cc);
   return { ok: fusion.ok, message };
 }
 
-function executer(commande, dossier, delai) {
+function executer(argv, dossier, delai) {
   return new Promise(resolve => {
-    const e = spawn('/bin/zsh', ['-lc', commande], { cwd: dossier, env: process.env });
+    const e = spawn(argv[0], argv.slice(1), { cwd: dossier, env: process.env });
+    e.on('error', err => resolve({ code: -1, sortie: 'Impossible de lancer ' + argv[0] + ' : ' + err.message }));
     let sortie = '';
     e.stdout.on('data', d => sortie += d); e.stderr.on('data', d => sortie += d);
     const t = setTimeout(() => e.kill('SIGTERM'), delai);
@@ -292,16 +298,27 @@ async function deployerVraiment(p, verifierApres, messageCommit) {
   const nc = await git(p.dossier, ['status', '--porcelain']);
   const n = nc.out ? nc.out.split('\n').length : 0;
   S.journal(p.nom, 'mise en prod lancée depuis la conversation');
-  const r = await executer(p.deploy, p.dossier, 15 * 60e3);
+  // « {fichiers} » dans la commande : seulement les fichiers changés depuis la dernière mise en ligne faite par Zylot.
+  let argv = p.deploy.split(/\s+/).filter(Boolean), envoyes = null;
+  if (argv.includes('{fichiers}')) {
+    const cc = lireConv(p.id);
+    if (!cc.aDeployerDepuis) return { erreur: 'Rien à mettre en ligne : aucune modification gardée depuis la dernière mise en ligne.' };
+    const d = await git(p.dossier, ['diff', '--name-only', '--diff-filter=ACMR', cc.aDeployerDepuis + '..HEAD']);
+    envoyes = d.out ? d.out.split('\n') : [];
+    if (!envoyes.length) return { erreur: 'Rien à mettre en ligne : aucun fichier changé.' };
+    argv = argv.flatMap(a => a === '{fichiers}' ? envoyes : [a]);
+  }
+  const r = await executer(argv, p.dossier, 15 * 60e3);
   const fin = r.sortie.trim().split('\n').slice(-25).join('\n');
   const ok = r.code === 0;
   S.journal(p.nom, ok ? 'mise en prod terminée' : `mise en prod en échec (code ${r.code})`, ok ? 'info' : 'erreur');
   let verif = '';
   if (ok && verifierApres) verif = await verifierApres();
   const message = avant + (ok ? 'Mise en prod terminée.' : `Mise en prod en échec (code ${r.code}).`) +
-    (n ? ` Attention : ${n} fichier${n > 1 ? 's' : ''} non commité${n > 1 ? 's' : ''} du dossier sont partis avec.` : '') +
+    (envoyes ? ` Fichiers envoyés : ${envoyes.join(', ')}.` : (n ? ` Attention : ${n} fichier${n > 1 ? 's' : ''} non commité${n > 1 ? 's' : ''} du dossier sont partis avec.` : '')) +
     `\n\nFin de la sortie de « ${p.deploy} » :\n${fin}` + (verif ? '\n\nVérification après mise en ligne :\n' + verif : '');
   const cc = lireConv(p.id); cc.demandeProd = null;
+  if (ok) cc.aDeployerDepuis = null;
   systeme(cc, ok ? 'Mis en ligne.' + (verif ? ' ' + verif.replace(/\n/g, ' ') : '') : `La mise en ligne a échoué (code ${r.code}) :\n${fin.split('\n').slice(-8).join('\n')}`);
   ecrireConv(p.id, cc);
   return { ok, message };

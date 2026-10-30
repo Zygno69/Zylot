@@ -26,6 +26,10 @@ Retirer : `./installer/installer.sh retirer`. Audit à la main : `node nuit.js` 
 
 La commande `claude` doit être connectée au compte (`claude`, puis `/login` si besoin) : c'est sa connexion que les agents utilisent, pas celle de l'appli de bureau.
 
+## Mise en ligne depuis la conversation
+
+Champ `deploy` de `projets.json`, lancé dans le dossier du projet (sans shell). `{fichiers}` y est remplacé par les seuls fichiers changés depuis la dernière mise en ligne faite par Zylot : le travail en cours du dossier ne part pas. Sans `{fichiers}`, le script envoie tout (et donc aussi les fichiers non commités : Claude prévient).
+
 ## Où sont les choses
 
 - `projets.json` : la liste des projets (dossier, site).
