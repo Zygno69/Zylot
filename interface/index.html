@@ -69,6 +69,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 .col{display:flex;flex-direction:column;gap:18px;min-width:0}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .panel-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.count:empty{display:none}
 .count{font-family:var(--f-mono);font-size:12px;background:var(--soft);padding:2px 8px;border-radius:99px;color:var(--muted)}
 .empty{padding:24px 16px;color:var(--muted);text-align:center;margin:0}
 
@@ -238,6 +239,34 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
 .histo li:last-child{border-bottom:0}
 .histo .mono{font-size:12px}
 @media (max-width:700px){ .histo li{grid-template-columns:1fr} }
+/* Cockpit */
+.cockpit-tete{display:flex;flex-direction:column;gap:10px}
+.bande{display:flex;flex-wrap:wrap;gap:8px}
+.bande span{background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:5px 12px;font-size:13px}
+.bande b{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.action{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 16px 11px 0;border-bottom:1px solid var(--line)}
+.action:last-child{border-bottom:0}
+.action .stripe{align-self:stretch;border-radius:0 3px 3px 0}
+.s-decision{background:var(--accent)} .s-publier{background:var(--ok)} .s-route{background:var(--ok)}
+.action .t{font-weight:600}
+.action .meta{color:var(--muted);font-size:12.5px}
+.action .boutons{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.bas{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:980px){.bas{grid-template-columns:minmax(0,1fr)}}
+.tuiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+.tuile{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:9px;min-width:0}
+.tuile.v-rouge{border-color:var(--crit)} .tuile.v-orange{border-color:var(--warn)}
+.tuile .haut{display:flex;align-items:center;gap:9px}
+.tuile .haut button{border:0;background:none;padding:0;font:inherit;font-family:var(--f-display);font-weight:700;font-size:17px;color:var(--ink);text-align:left;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tuile .haut button:hover{color:var(--accent)}
+.tuile .ligne{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;min-width:0}
+.tuile .ligne > span:first-child{color:var(--muted);font-size:12px;flex:none}
+.tuile .ligne > span:last-child{text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini{display:inline-flex;align-items:flex-end;gap:1px;height:16px;vertical-align:middle;margin-left:6px}
+.mini i{width:3px;background:var(--accent);opacity:.6;border-radius:1px}
+.mini i.vide{background:var(--soft);opacity:1} .mini i.panne{background:var(--crit);opacity:1}
+.tuile .pied{display:flex;gap:6px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:9px;margin-top:2px}
+.grade.petit{width:26px;height:26px;font-size:15px;border-radius:7px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:500;z-index:30;max-width:calc(100% - 32px)}
 </style>
 </head>
@@ -259,30 +288,26 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
     <button class="tab" role="tab" data-onglet="propositions" aria-selected="false">Propositions <span class="count" id="cProp"></span></button>
   </nav>
 
-  <!-- VUE D'ENSEMBLE -->
+  <!-- VUE D'ENSEMBLE : le cockpit -->
   <section id="o-vue" class="col">
-    <p class="synthese" id="synthese">Chargement…</p>
-    <div class="gauges" id="gaugesVue"></div>
-    <div class="main">
-      <div class="col">
-        <section class="panel">
-          <div class="panel-h"><h2>Projets</h2><span class="muted" style="font-size:12.5px">cliquez sur une ligne pour le détail</span></div>
-          <div class="table-wrap"><table>
-            <thead><tr><th>Projet</th><th>Site</th><th>Certificat</th><th>Code</th><th>Sécurité</th><th>Liens</th></tr></thead>
-            <tbody id="tProjets"></tbody>
-          </table></div>
-        </section>
-      </div>
-      <div class="col">
-        <section class="panel">
-          <div class="panel-h"><h2>À regarder</h2><span class="count" id="nRegarder">0</span></div>
-          <div id="regarder"></div>
-        </section>
-        <section class="panel">
-          <div class="panel-h"><h2>Journal</h2></div>
-          <ul class="log" id="log"></ul>
-        </section>
-      </div>
+    <div class="cockpit-tete">
+      <p class="synthese" id="synthese">Chargement…</p>
+      <div class="bande" id="bande"></div>
+    </div>
+    <section class="panel">
+      <div class="panel-h"><h2>À traiter maintenant</h2><span class="count" id="nTraiter">0</span></div>
+      <div id="traiter"></div>
+    </section>
+    <div class="tuiles" id="tuiles"></div>
+    <div class="bas">
+      <section class="panel">
+        <div class="panel-h"><h2>Dernières mises en ligne</h2></div>
+        <ul class="histo" id="dernieres"></ul>
+      </section>
+      <section class="panel">
+        <div class="panel-h"><h2>Journal</h2></div>
+        <ul class="log" id="log"></ul>
+      </section>
     </div>
   </section>
 
@@ -388,50 +413,91 @@ function rendre(){
   const rouges = P.filter(p=>voyant(p)==='rouge').length;
 
   // Onglets : compteurs
-  $('#cRegarder').textContent = importants.length || '';
+  $('#cRegarder').textContent = '';
   $('#cSites').textContent = sites.length ? `${enLigne}/${sites.length}` : '';
   const notes = P.filter(p=>p.notation);
   $('#cSecu').textContent = notes.length ? notes.map(p=>p.notation.lettre).sort().at(-1) : '';
 
-  // Synthèse
-  $('#synthese').innerHTML = `${pl(P.length,'projet')} · ` +
-    (sites.length ? (enLigne===sites.length ? `<b class="t-vert">les ${sites.length} sites sont en ligne</b>` : `<b class="t-rouge">${sites.length-enLigne} site${sites.length-enLigne>1?'s':''} sur ${sites.length} en difficulté</b>`) : '') +
-    ` · ${importants.length ? `<b class="${rouges?'t-rouge':'t-orange'}">${pl(importants.length,'chose')} à regarder</b>` : 'rien d\'important à signaler'}.`;
-
+  // Synthèse et bande de chiffres
+  const enTravail = P.filter(p=>p.conversation?.enCours || p.conversation?.prodEnCours);
+  $('#synthese').innerHTML = `${pl(P.length,'site')} · ` +
+    (sites.length ? (enLigne===sites.length ? `<b class="t-vert">tous en ligne</b>` : `<b class="t-rouge">${sites.length-enLigne} en difficulté</b>`) : '') +
+    (enTravail.length ? ` · <b style="color:var(--run)">Claude travaille sur ${enTravail.map(p=>esc(p.nom)).join(', ')}</b>` : '') + '.';
   const certs = sites.map(p=>p.surveillance?.etat?.cert).filter(Boolean);
   const minCert = certs.length ? Math.min(...certs.map(c=>c.jours)) : null;
   const moyMs = sites.map(p=>p.surveillance?.etat?.ms).filter(Boolean);
-  const nonPousses = P.filter(p=>p.depot?.nonPousses>0 || (p.depot?.git && !p.depot.dernierCommit)).length;
-  $('#gaugesVue').innerHTML = `
-    <div class="gauge"><span class="label">Sites en ligne</span><span class="val mono ${enLigne<sites.length?'t-rouge':''}">${enLigne} / ${sites.length}</span><span class="sub">${moyMs.length?'réponse moyenne '+Math.round(moyMs.reduce((a,b)=>a+b,0)/moyMs.length)+' ms':'en attente du premier test'}</span></div>
-    <div class="gauge"><span class="label">Certificats</span><span class="val mono ${minCert!=null&&minCert<30?'t-orange':''}">${minCert==null?'–':minCert+' j'}</span><span class="sub">le plus proche de l'expiration</span></div>
-    <div class="gauge"><span class="label">Sécurité</span><span class="val mono">${notes.length?notes.map(p=>p.notation.lettre).sort().join(' '):'–'}</span><span class="sub">notes des sites, de A à E</span></div>
-    <div class="gauge"><span class="label">Code à mettre à l'abri</span><span class="val mono ${nonPousses?'t-orange':''}">${nonPousses}</span><span class="sub">projet${nonPousses>1?'s':''} avec du travail absent de GitHub</span></div>`;
+  const notesTxt = Object.entries(notes.reduce((o,p)=>(o[p.notation.lettre]=(o[p.notation.lettre]||0)+1,o),{})).sort().map(([l,n])=>`${n}×${l}`).join(' ');
+  const aPublier = P.reduce((n,p)=>n+(p.aMettreEnLigne>0?1:0),0);
+  const enCi = P.filter(p=>p.modeProd==='github').length;
+  $('#bande').innerHTML = [
+    `<span>En ligne <b>${enLigne}/${sites.length}</b>${moyMs.length?` · ${Math.round(moyMs.reduce((a,b)=>a+b,0)/moyMs.length)} ms`:''}</span>`,
+    `<span>Certificat le plus proche <b class="${minCert!=null&&minCert<30?'t-orange':''}">${minCert==null?'–':minCert+' j'}</b></span>`,
+    `<span>Sécurité <b>${notesTxt||'–'}</b></span>`,
+    `<span>En CI/CD <b>${enCi}/${P.length}</b></span>`,
+    aPublier ? `<span>À publier <b class="t-orange">${aPublier}</b></span>` : '',
+  ].join('');
 
-  // Tableau des projets
-  $('#tProjets').innerHTML = P.map(p=>{
-    const e = p.surveillance?.etat, dep = p.depot, n = p.notation;
-    const site = !p.site ? `<span class="muted">pas de site suivi</span>` :
-      !e ? `<span class="muted">premier test…</span>` :
-      `<span class="${e.ok?'t-vert':'t-rouge'}">${e.ok?'en ligne':'hors ligne'}</span>${e.ok?` <span class="mono muted">${e.ms} ms</span>`:''}<div class="s">${esc(p.site.replace(/^https?:\/\//,''))}</div>`;
-    const cert = !e?.cert ? '<span class="muted">—</span>' : `<span class="mono ${e.cert.jours<14?'t-rouge':e.cert.jours<30?'t-orange':''}">${e.cert.jours} j</span><div class="s">${new Date(e.cert.expire).toLocaleDateString('fr-FR')}</div>`;
-    const code = !dep ? '—' : !dep.git ? '<span class="muted">pas de git</span>' : !dep.dernierCommit ? '<span class="t-orange">aucun commit</span>' :
-      `${age(dep.dernierCommit.quand)}<div class="s">${dep.nonPousses>0?`<span class="t-orange">${dep.nonPousses} non poussé${dep.nonPousses>1?'s':''}</span>`:dep.nonPousses===0?'à jour sur GitHub':'pas de suivi distant'}${dep.nonCommites?` · ${dep.nonCommites} en cours`:''}</div>`;
-    const secu = n ? `<span class="grade g-${n.lettre}">${n.lettre}</span>` : `<span class="grade g-x" title="Pas de site à contrôler">–</span>`;
-    const liens = [p.site&&`<a href="${esc(p.site)}" target="_blank" rel="noopener">Site</a>`, p.admin&&`<a href="${esc(p.admin)}" target="_blank" rel="noopener">Admin</a>`, dep?.github&&`<a href="${esc(dep.github)}" target="_blank" rel="noopener">GitHub</a>`].filter(Boolean).join('') || '<span class="muted">—</span>';
-    return `<tr data-projet="${esc(p.id)}"><td><div class="nom"><span class="dot d-${voyant(p)}"></span>${esc(p.nom)}</div></td><td>${site}</td><td>${cert}</td><td>${code}</td><td>${secu}</td><td><div class="liens">${liens}</div></td></tr>`;
+  // À traiter maintenant : ce qui attend une action, avec le bouton pour la faire
+  const actions = [];
+  for(const p of P){
+    const c = p.conversation || {}, nom = esc(p.nom), id = esc(p.id);
+    const ouvrir = (v, t='Ouvrir') => `<button type="button" class="btn small" data-aller-volet="${id}|${v}">${t}</button>`;
+    if(c.enCours) actions.push({o:3, s:'decision', t:'Claude travaille', p:nom, b:ouvrir('conv','Suivre')});
+    if(c.modif) actions.push({o:1, s:'decision', t:'Une modification de Claude attend votre décision', p:nom, b:ouvrir('conv','Voir')});
+    if(c.demande) actions.push({o:1, s:'decision', t:'Claude propose de mettre en ligne', p:nom, b:ouvrir('conv','Voir')});
+    if(c.attenteEnLigne) actions.push({o:4, s:'route', t:'Envoyé : mise en ligne en cours', p:nom, b:ouvrir('prod','Suivre')});
+    // En CI/CD, ce qui n'est pas sur GitHub n'est pas en ligne non plus : c'est à publier.
+    const aPub = p.aMettreEnLigne > 0 ? p.aMettreEnLigne : (p.modeProd==='github' && p.depot?.nonPousses > 0 ? p.depot.nonPousses : 0);
+    if(!c.attenteEnLigne && aPub > 0 && p.modeProd) actions.push({o:2, s:'publier', t:`${pl(aPub,'commit')} prêt${aPub>1?'s':''} à mettre en ligne`, p:nom,
+      b:`<button type="button" class="btn small primary" data-publier="${id}" ${c.enCours||c.prodEnCours?'disabled':''}>Mettre en ligne</button>${ouvrir('prod','Détail')}`});
+    for(const x of aRegarder(p)) if(x.g!=='info') actions.push({o:0, s:x.g, t:x.t, p:nom, b:ouvrir('code','Voir')});
+    if(p.depot?.nonPousses > 0 && !(p.aMettreEnLigne > 0) && p.modeProd!=='github') actions.push({o:5, s:'info', t:`${pl(p.depot.nonPousses,'commit')} pas sur GitHub`, p:nom, b:ouvrir('prod','Voir')});
+  }
+  actions.sort((a,b)=>a.o-b.o);
+  $('#nTraiter').textContent = actions.length;
+  $('#traiter').innerHTML = actions.length ? actions.map(a=>`<div class="action"><span class="stripe s-${a.s}"></span><span><span class="t">${esc(a.t)}</span><br><span class="meta">${a.p}</span></span><span class="boutons">${a.b}</span></div>`).join('')
+    : '<p class="empty">Rien à traiter. Tout tourne.</p>';
+
+  // Une tuile par site
+  $('#tuiles').innerHTML = P.map(p=>{
+    const e = p.surveillance?.etat, dep = p.depot, n = p.notation, c = p.conversation || {}, v = voyant(p);
+    const h = p.surveillance?.heures || [], max = Math.max(1, ...h.filter(Boolean).map(x=>x.ms||0));
+    const mini = h.length ? `<span class="mini" title="Temps de réponse sur 24 h">${h.map(x=>!x?'<i class="vide" style="height:30%"></i>':`<i class="${x.panne?'panne':''}" style="height:${Math.max(15,(x.ms||0)/max*100)}%"></i>`).join('')}</span>` : '';
+    const site = !p.site ? '<span class="muted">pas de site</span>' : !e ? '<span class="muted">premier test…</span>' : e.ok ? `<span class="t-vert">en ligne</span> <span class="mono muted">${e.ms} ms</span>${mini}` : `<span class="t-rouge">${esc(e.erreur||'hors ligne')}</span>`;
+    const prod = p.version ? `<span class="mono">${esc(p.version.sha.slice(0,7))}</span> · ${age(p.version.date)}${p.aMettreEnLigne>0?` · <span class="t-orange">${p.aMettreEnLigne} à publier</span>`:p.aMettreEnLigne===0?' · <span class="t-vert">à jour</span>':''}`
+      : `<span class="muted">${p.modeProd==='github'?'CI/CD · version à venir':p.modeProd==='script'?'script depuis le Mac':'non configurée'}</span>${p.modeProd==='github'&&p.depot?.nonPousses>0?` · <span class="t-orange">${p.depot.nonPousses} à publier</span>`:''}`;
+    const code = !dep?.git ? '<span class="muted">pas de git</span>' : !dep.dernierCommit ? '<span class="t-orange">aucun commit</span>' :
+      `${age(dep.dernierCommit.quand)}${dep.nonPousses>0?` · <span class="t-orange">${dep.nonPousses} non poussé${dep.nonPousses>1?'s':''}</span>`:''}${dep.nonCommites?` · ${dep.nonCommites} en cours`:''}`;
+    const claude = c.enCours ? '<span style="color:var(--run)">travaille…</span>' : c.prodEnCours ? '<span style="color:var(--run)">met en ligne…</span>' : (c.modif||c.demande) ? '<span class="t-orange">attend votre décision</span>' : c.dernier ? `<span class="muted">dernier échange ${age(c.dernier)}</span>` : '<span class="muted">—</span>';
+    const id = esc(p.id);
+    return `<article class="tuile v-${v}">
+      <div class="haut"><span class="dot d-${v}"></span><button type="button" data-aller-volet="${id}|conv">${esc(p.nom)}</button>${n?`<span class="grade petit g-${n.lettre}" title="Sécurité ${n.score}/100">${n.lettre}</span>`:''}</div>
+      <div class="ligne"><span>Site</span><span>${site}</span></div>
+      <div class="ligne"><span>En prod</span><span>${prod}</span></div>
+      <div class="ligne"><span>Code</span><span>${code}</span></div>
+      <div class="ligne"><span>Claude</span><span>${claude}</span></div>
+      <div class="pied">
+        <button type="button" class="btn small" data-aller-volet="${id}|conv">Conversation</button>
+        <button type="button" class="btn small" data-aller-volet="${id}|prod">Mise en ligne</button>
+        ${p.site?`<a class="btn small" href="${esc(p.site)}" target="_blank" rel="noopener" style="text-decoration:none">Site ↗</a>`:''}
+      </div>
+    </article>`;
   }).join('');
 
-  // À regarder
-  $('#nRegarder').textContent = tous.length;
-  $('#regarder').innerHTML = tous.length ? tous.slice(0,14).map((x,i)=>`
-    <button type="button" class="item" data-projet="${esc(x.p.id)}">
-      <span class="stripe s-${x.g}"></span>
-      <span><span class="t">${esc(x.t)}</span><span class="meta"><span class="pill p-${x.g}">${GRAV[x.g]}</span><span>${esc(x.p.nom)}</span></span></span>
-    </button>`).join('') + (tous.length>14?`<p class="empty" style="padding:10px">et ${tous.length-14} autres, dans le détail de chaque projet</p>`:'')
-    : '<p class="empty">Rien à signaler. Tout tourne.</p>';
+  // Dernières mises en ligne, tous sites
+  $('#dernieres').innerHTML = (D.miseEnLigne||[]).length ? D.miseEnLigne.map(d=>`<li><span class="muted">${quand(d.misEnLigne||d.quand)}</span><span class="mono">${esc((d.sha||'').slice(0,7))}</span><span><b>${esc(d.nom)}</b></span><span class="muted" style="font-size:12px">${esc(d.via||'')}</span></li>`).join('')
+    : '<li><span class="muted" style="grid-column:1/-1">Aucune mise en ligne enregistrée pour l\'instant. Elles apparaîtront ici, tous sites confondus.</span></li>';
 
-  $('#log').innerHTML = D.journal.length ? D.journal.slice(0,25).map(l=>`<li class="${esc(l.niveau)}"><span>${quand(l.quand)}</span><span><b>${esc(l.projet)}</b> · ${esc(l.message)}</span></li>`).join('') : '<li><span></span><span class="muted">Rien pour l\'instant.</span></li>';
+  // Journal, sans les doublons consécutifs
+  // Une même ligne revenue dans les 5 minutes (même parmi d'autres) est regroupée.
+  const jr = [];
+  for(const l of D.journal){
+    const k = l.projet+'|'+l.message, t = new Date(l.quand);
+    const deja = jr.slice(-4).find(x=>x.k===k && Math.abs(new Date(x.quand)-t) < 5*60e3);
+    if(deja){ deja.n++; continue; }
+    jr.push({...l, k, n:1});
+  }
+  $('#log').innerHTML = jr.length ? jr.slice(0,15).map(l=>`<li class="${esc(l.niveau)}"><span>${quand(l.quand)}</span><span><b>${esc(l.projet)}</b> · ${esc(l.message)}${l.n>1?` <span class="muted">(×${l.n})</span>`:''}</span></li>`).join('') : '<li><span></span><span class="muted">Rien pour l\'instant.</span></li>';
 
   rendreSurveillance(sites);
   rendreSecurite(P);
@@ -826,6 +892,9 @@ document.addEventListener('click', async e=>{
   if(b.dataset.fermer!==undefined) return fermer();
   if(b.dataset.vu){ try{ await api('/api/alertes/'+b.dataset.vu+'/vu',{}); fermer(); toast('Marquée comme vue'); charger(); }catch(err){ toast(err.message); } return; }
   if(b.dataset.aller!==undefined) return aller(b.dataset.aller);
+  if(b.dataset.allerVolet){ const [id, v] = b.dataset.allerVolet.split('|'); return aller(id, v); }
+  if(b.dataset.publier){ if(!await deuxClics(b,'Confirmer')) return;
+    try{ await api('/api/conversation/'+b.dataset.publier+'/deployer',{}); toast('Mise en ligne lancée'); setTimeout(charger, 2500); }catch(err){ toast(err.message); } return; }
   if(b.dataset.volet) return montrerVolet(b.dataset.volet);
   if(b.dataset.demander!==undefined){
     const x = pointsOuverts[+b.dataset.demander];

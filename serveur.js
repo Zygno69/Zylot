@@ -92,6 +92,7 @@ async function etat() {
       surveillance: surv,
       securite: controle,
       version: surv && surv.etat ? surv.etat.version || null : null,
+      modeProd: p.ci === 'github' ? 'github' : p.deploy ? 'script' : null,
       aMettreEnLigne: await aMettreEnLigne(p, surv && surv.etat && surv.etat.version),
       conversation: (({ enCours, prodEnCours, modif, demandeProd, questionProd, attenteEnLigne, messages }) => ({
         enCours, prodEnCours, modif: !!modif, demande: !!(demandeProd || questionProd), attenteEnLigne: !!attenteEnLigne,
@@ -104,7 +105,10 @@ async function etat() {
       },
     };
   }));
-  return { projets, alertes, journal: S.lireJournal(40), enCours: S.verrou(), securiteEnCours, maintenant: new Date().toISOString() };
+  // Dernières mises en ligne, tous sites confondus (sans les versions simplement trouvées en ligne au premier passage).
+  const miseEnLigne = S.projets().flatMap(p => S.deploiements(p.id, 6).filter(d => !d.premiereLecture).map(d => ({ ...d, projet: p.id, nom: p.nom })))
+    .sort((a, b) => String(b.misEnLigne || b.quand).localeCompare(String(a.misEnLigne || a.quand))).slice(0, 10);
+  return { projets, alertes, journal: S.lireJournal(60), miseEnLigne, enCours: S.verrou(), securiteEnCours, maintenant: new Date().toISOString() };
 }
 
 // Les suggestions de Zylot pour un projet, de la plus importante à la moins importante.
