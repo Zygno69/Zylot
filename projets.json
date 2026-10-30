@@ -1,0 +1,10 @@
+[
+  { "id": "alf",        "nom": "ALF Futsal",    "dossier": "~/ALF",           "site": "https://alf-futsal.fr" },
+  { "id": "ligue",      "nom": "Ligue hockey",  "dossier": "~/AURA",          "site": null, "note": "Le domaine ne pointe pas encore sur le nouveau site : audit du code seulement." },
+  { "id": "beausejour", "nom": "Beauséjour",    "dossier": "~/BEAUSEJOUR",    "site": "https://copro-beausejour.fr" },
+  { "id": "cascol",     "nom": "Cascol coachs", "dossier": "~/COACH",         "site": "https://cascol-coachs.fr" },
+  { "id": "duo",        "nom": "Duo",           "dossier": "~/DUO",           "site": null },
+  { "id": "lmo",        "nom": "LMO",           "dossier": "~/LMO",           "site": "https://lmo-lyon.com" },
+  { "id": "plan2",      "nom": "Plan2Sécurité", "dossier": "~/PLAN2SECURITE", "site": "https://www.plan2securite.fr" },
+  { "id": "mir",        "nom": "Men In Red",    "dossier": "~/MIR/MIR",       "site": "https://men-in-red.fr" }
+]

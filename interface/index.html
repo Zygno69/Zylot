@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zylot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Bandeau d'état, puis deux colonnes : à gauche ce qui attend une décision, à droite les projets et le journal. */
+:root{
+  --bg:#f3f4f7; --panel:#ffffff; --ink:#161a24; --muted:#5d6577; --line:#dde1ea; --soft:#eaedf3;
+  --accent:#2f56c9; --accent-ink:#ffffff;
+  --crit:#c4362c; --crit-bg:#fbe9e7; --warn:#a86a00; --warn-bg:#fdf1dc; --ok:#1f7a4d; --ok-bg:#e3f3ea; --run:#2f56c9; --run-bg:#e5ebfb; --idle:#7b8396; --idle-bg:#eceef2;
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"Instrument Sans", system-ui, -apple-system, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0f121a; --panel:#171b25; --ink:#e8ebf2; --muted:#9aa2b5; --line:#2a3040; --soft:#202533;
+  --accent:#7d9bf0; --accent-ink:#0f121a;
+  --crit:#f07a6e; --crit-bg:#3a1d1b; --warn:#e7b158; --warn-bg:#352a14; --ok:#5fc796; --ok-bg:#16301f; --run:#7d9bf0; --run-bg:#1d2642; --idle:#8d94a6; --idle-bg:#232836;
+  color-scheme:dark}}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+.wrap{max-width:1280px;margin:0 auto;padding-inline:20px;padding-block:18px 48px;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance}
+h1{font-size:22px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:700}
+.label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.lien{font-size:12px;color:var(--muted)}
+.lien.off{color:var(--crit)}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:8px;font-weight:600}
+.btn:hover:not(:disabled){border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{background:var(--crit);color:var(--panel);border-color:var(--crit)}
+.btn.small{padding:4px 10px;font-size:12.5px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.gauge{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.gauge .val{font-family:var(--f-display);font-size:26px;font-weight:700;line-height:1}
+.gauge .sub{color:var(--muted);font-size:12.5px}
+.bar{height:6px;border-radius:99px;background:var(--soft);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+
+.main{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:18px;align-items:start}
+@media (max-width:900px){.main{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:18px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.panel-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.count{font-family:var(--f-mono);font-size:12px;background:var(--soft);padding:2px 8px;border-radius:99px;color:var(--muted)}
+
+.item{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:12px;padding:12px 16px 12px 0;border:0;border-bottom:1px solid var(--line);cursor:pointer;align-items:start;background:none;width:100%;text-align:left;color:inherit}
+.item:last-child{border-bottom:0}
+.item:hover{background:var(--soft)}
+.item .stripe{align-self:stretch;border-radius:0 3px 3px 0}
+.item .t{font-weight:600}
+.item .meta{color:var(--muted);font-size:12.5px;display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+.item time{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.g-urgent .stripe{background:var(--crit)} .g-securite .stripe{background:var(--warn)} .g-info .stripe{background:var(--idle)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-urgent{color:var(--crit);background:var(--crit-bg)} .p-securite,.p-attention{color:var(--warn);background:var(--warn-bg)} .p-info,.p-jamais{color:var(--idle);background:var(--idle-bg)}
+.p-ok{color:var(--ok);background:var(--ok-bg)} .p-run{color:var(--run);background:var(--run-bg)} .p-erreur{color:var(--crit);background:var(--crit-bg)}
+.empty{padding:28px 16px;color:var(--muted);text-align:center;margin:0}
+
+.projects{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1px;background:var(--line)}
+.proj{background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.proj-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.proj h3{font-size:15px;font-weight:700}
+.proj .task{font-size:13px;flex:1}
+.proj .facts{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--muted);font-size:12px;border-top:1px dashed var(--line);padding-top:8px}
+.proj .site{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+
+.log{list-style:none;margin:0;padding:6px 0}
+.log li{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;padding:7px 16px;font-size:13px}
+.log li span:first-child{font-family:var(--f-mono);color:var(--muted);font-size:12px;padding-top:1px}
+.log li.erreur span:last-child,.log li.urgent span:last-child{color:var(--crit)}
+.log li b{font-weight:600}
+
+.scrim{position:fixed;inset:0;background:rgba(10,14,24,.45);display:flex;justify-content:flex-end;z-index:20}
+.drawer{background:var(--panel);width:min(600px,100%);height:100%;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:16px;border-left:1px solid var(--line)}
+.drawer h2{font-size:20px}
+.drawer p{margin:0;max-width:64ch;white-space:pre-wrap}
+.drawer h4{margin:6px 0 0;font-size:13px}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 14px;font-size:13px;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0;overflow-wrap:anywhere}
+.files{font-family:var(--f-mono);font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow-x:auto;white-space:pre;margin:0}
+.liste{display:flex;flex-direction:column;gap:10px}
+.liste > div{border-left:3px solid var(--line);padding-left:10px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;padding-top:12px;border-top:1px solid var(--line)}
+.close{align-self:flex-end;border:0;background:none;color:var(--muted);font-size:13px;padding:4px}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:500;z-index:30;max-width:calc(100% - 32px)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Zylot</h1>
+      <span class="lien" id="lien">connexion…</span>
+    </div>
+    <div class="row">
+      <button class="btn primary" type="button" id="toutAuditer">Auditer tous les projets</button>
+    </div>
+  </header>
+
+  <section class="gauges" aria-label="État général">
+    <div class="gauge">
+      <span class="label">À décider</span>
+      <span class="val mono" id="gAlertes">–</span>
+      <span class="sub" id="gAlertesSub"></span>
+    </div>
+    <div class="gauge">
+      <span class="label">Projets vus</span>
+      <span class="val mono" id="gVus">–</span>
+      <div class="bar"><i id="gVusBar" style="width:0"></i></div>
+      <span class="sub">audités ces dernières 24 h</span>
+    </div>
+    <div class="gauge">
+      <span class="label">Audit</span>
+      <span class="val" id="gAudit" style="font-size:20px">–</span>
+      <div class="bar" id="gAuditBarWrap" hidden><i id="gAuditBar" style="width:0"></i></div>
+      <span class="sub" id="gAuditSub"></span>
+    </div>
+    <div class="gauge">
+      <span class="label">Prochain audit de nuit</span>
+      <span class="val mono">01:00</span>
+      <span class="sub">en lecture seule, l'un après l'autre</span>
+    </div>
+  </section>
+
+  <div class="main">
+    <div class="col">
+      <section class="panel" aria-labelledby="inboxTitle">
+        <div class="panel-h"><h2 id="inboxTitle">À décider</h2><span class="count" id="inboxCount">0</span></div>
+        <div id="inbox"><p class="empty">Chargement…</p></div>
+      </section>
+      <section class="panel" aria-labelledby="logTitle">
+        <div class="panel-h"><h2 id="logTitle">Journal</h2></div>
+        <ul class="log" id="log"></ul>
+      </section>
+    </div>
+    <div class="col">
+      <section class="panel" aria-labelledby="projTitle">
+        <div class="panel-h"><h2 id="projTitle">Projets</h2><span class="count" id="projCount"></span></div>
+        <div class="projects" id="projects"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" hidden>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle"></aside>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const GRAVITE = {urgent:'Urgent', securite:'Sécurité', info:'Info'};
+const ETAT = {ok:'Au calme', attention:'À regarder', urgent:'Urgent', erreur:'Audit en échec', jamais:'Jamais audité', run:'Audit en cours'};
+let donnees = null, toastTimer;
+
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.hidden=true,3000); }
+
+function quand(iso){
+  if(!iso) return '';
+  const d = new Date(iso), maintenant = new Date();
+  const h = d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  if(d.toDateString() === maintenant.toDateString()) return h;
+  const hier = new Date(maintenant); hier.setDate(hier.getDate()-1);
+  if(d.toDateString() === hier.toDateString()) return 'hier ' + h;
+  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}) + ' ' + h;
+}
+
+async function api(chemin, corps){
+  const r = await fetch(chemin, corps === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-Zylot':'1'}, body:JSON.stringify(corps)});
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.erreur || 'Erreur ' + r.status);
+  return j;
+}
+
+async function charger(){
+  try{
+    donnees = await api('/api/etat');
+    $('#lien').textContent = 'à jour à ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    $('#lien').classList.remove('off');
+    rendre();
+  }catch(e){
+    $('#lien').textContent = 'serveur injoignable — lancez « node serveur.js »';
+    $('#lien').classList.add('off');
+  }
+}
+
+function etatProjet(p){
+  if(donnees.enCours && donnees.enCours.projet === p.id) return 'run';
+  if(!p.dernier) return 'jamais';
+  if(p.dernier.erreur) return 'erreur';
+  return p.dernier.etat || 'ok';
+}
+
+function rendre(){
+  const {projets, alertes, journal, enCours} = donnees;
+  const nom = id => projets.find(p=>p.id===id)?.nom || id;
+
+  // Bandeau
+  $('#gAlertes').textContent = alertes.length;
+  const nUrg = alertes.filter(a=>a.gravite==='urgent').length, nSec = alertes.filter(a=>a.gravite==='securite').length;
+  $('#gAlertesSub').textContent = alertes.length ? `${nUrg} urgent · ${nSec} sécurité · ${alertes.length-nUrg-nSec} info` : 'rien en attente';
+  const vus = projets.filter(p=>p.dernier && !p.dernier.erreur && Date.now()-new Date(p.dernier.quand) < 864e5).length;
+  $('#gVus').textContent = `${vus} / ${projets.length}`;
+  $('#gVusBar').style.width = (projets.length ? vus/projets.length*100 : 0) + '%';
+  if(enCours){
+    $('#gAudit').textContent = 'En cours : ' + nom(enCours.projet);
+    $('#gAuditSub').textContent = `projet ${enCours.rang} sur ${enCours.total} · depuis ${quand(enCours.debut)}`;
+    $('#gAuditBarWrap').hidden = false;
+    $('#gAuditBar').style.width = ((enCours.rang-1)/enCours.total*100) + '%';
+  }else{
+    const derniers = projets.map(p=>p.dernier?.quand).filter(Boolean).sort();
+    $('#gAudit').textContent = derniers.length ? 'Au repos' : 'Jamais lancé';
+    $('#gAuditSub').textContent = derniers.length ? 'dernier rapport : ' + quand(derniers.at(-1)) : 'lancez un premier audit';
+    $('#gAuditBarWrap').hidden = true;
+  }
+  $('#toutAuditer').disabled = !!enCours;
+
+  // À décider
+  $('#inboxCount').textContent = alertes.length;
+  const ordre = {urgent:0, securite:1, info:2};
+  $('#inbox').innerHTML = alertes.length ? [...alertes].sort((a,b)=>ordre[a.gravite]-ordre[b.gravite] || b.quand.localeCompare(a.quand)).map(a=>`
+    <button type="button" class="item g-${esc(a.gravite)}" data-alerte="${esc(a.id)}">
+      <span class="stripe"></span>
+      <span><span class="t">${esc(a.titre)}</span>
+        <span class="meta"><span class="pill p-${esc(a.gravite)}">${GRAVITE[a.gravite]||esc(a.gravite)}</span><span>${esc(nom(a.projet))}</span></span></span>
+      <time>${quand(a.quand)}</time>
+    </button>`).join('') : '<p class="empty">Rien à décider. Tout est au calme.</p>';
+
+  // Projets
+  $('#projCount').textContent = projets.length;
+  $('#projects').innerHTML = projets.map(p=>{
+    const e = etatProjet(p);
+    const texte = e==='run' ? 'L\'agent lit le code…' : e==='jamais' ? (p.note || 'Pas encore audité.') : p.dernier.erreur ? p.dernier.erreur : p.dernier.resume;
+    return `<article class="proj">
+      <div class="proj-h"><h3>${esc(p.nom)}</h3><span class="pill p-${e}">${ETAT[e]}</span></div>
+      <div class="site">${p.site ? esc(p.site.replace(/^https?:\/\//,'')) : 'pas de site audité'}${p.dossierExiste ? '' : ' · <span style="color:var(--crit)">dossier introuvable</span>'}</div>
+      <div class="task">${esc(String(texte).slice(0,220))}</div>
+      <div class="facts">
+        <span>${p.dernier ? 'Audit ' + quand(p.dernier.quand) : '—'}</span>
+        <span class="row" style="gap:6px">
+          ${p.dernier && !p.dernier.erreur ? `<button type="button" class="btn small" data-rapport="${esc(p.id)}">Rapport</button>` : ''}
+          <button type="button" class="btn small" data-auditer="${esc(p.id)}" ${enCours?'disabled':''}>Auditer</button>
+        </span>
+      </div>
+    </article>`;
+  }).join('');
+
+  // Journal
+  $('#log').innerHTML = journal.length ? journal.map(l=>`<li class="${esc(l.niveau)}"><span>${quand(l.quand)}</span><span><b>${esc(l.projet)}</b> · ${esc(l.message)}</span></li>`).join('') : '<li><span></span><span style="color:var(--muted)">Rien pour l\'instant.</span></li>';
+}
+
+// --- Panneau de détail ---
+function ouvrir(html){ $('#drawer').innerHTML = '<button type="button" class="close" data-fermer>Fermer ✕</button>' + html; $('#scrim').hidden=false; $('#drawer .close').focus(); }
+function fermer(){ $('#scrim').hidden = true; }
+
+function ouvrirAlerte(id){
+  const a = donnees.alertes.find(x=>x.id===id); if(!a) return;
+  const p = donnees.projets.find(x=>x.id===a.projet);
+  ouvrir(`
+    <div class="row"><span class="pill p-${esc(a.gravite)}">${GRAVITE[a.gravite]||''}</span><span class="label">${esc(p?.nom||a.projet)} · ${quand(a.quand)}${a.revue ? ' · revue ' + quand(a.revue) : ''}</span></div>
+    <h2 id="dTitle">${esc(a.titre)}</h2>
+    <p>${esc(a.detail)}</p>
+    ${a.fichiers?.length ? `<div><div class="label" style="margin-bottom:6px">Où regarder</div><pre class="files">${a.fichiers.map(esc).join('\n')}</pre></div>` : ''}
+    <div class="actions">
+      <button type="button" class="btn primary" data-vu="${esc(a.id)}">Vu, je m'en occupe</button>
+      <button type="button" class="btn" data-rapport="${esc(a.projet)}">Rapport complet</button>
+    </div>`);
+}
+
+function ouvrirRapport(id){
+  const p = donnees.projets.find(x=>x.id===id); const r = p?.dernier; if(!r) return;
+  const s = r.site;
+  ouvrir(`
+    <div class="row"><span class="pill p-${esc(r.etat||'ok')}">${ETAT[r.etat]||''}</span><span class="label">audit ${quand(r.quand)} · ${Math.max(1,Math.round((r.duree||0)/60))} min</span></div>
+    <h2 id="dTitle">${esc(p.nom)}</h2>
+    <p>${esc(r.resume)}</p>
+    <dl class="kv">
+      <dt>Site</dt><dd>${s?.verifie ? (s.repond ? 'répond' : '<span style="color:var(--crit)">ne répond pas</span>') + (s.certificat_expire_le ? ' · certificat jusqu\'au ' + esc(s.certificat_expire_le) : '') : 'non vérifié'}</dd>
+      ${s?.detail ? `<dt></dt><dd>${esc(s.detail)}</dd>` : ''}
+      <dt>Points relevés</dt><dd>${r.nbAlertes}</dd>
+    </dl>
+    ${r.propositions?.length ? `<h4>Propositions</h4><div class="liste">${r.propositions.map(x=>`<div><b>${esc(x.titre)}</b><br>${esc(x.detail)}</div>`).join('')}</div>` : ''}
+    <div class="actions"><button type="button" class="btn" data-fermer>Fermer</button></div>`);
+}
+
+async function auditer(ids, bouton){
+  // Deux clics : l'audit consomme du quota Claude.
+  if(bouton && !bouton.dataset.arme){
+    bouton.dataset.arme = '1'; const avant = bouton.textContent;
+    bouton.textContent = ids.length ? 'Confirmer' : `Confirmer (${donnees.projets.length} projets)`;
+    setTimeout(()=>{ if(bouton.isConnected){ delete bouton.dataset.arme; bouton.textContent = avant; } }, 4000);
+    return;
+  }
+  try{ await api('/api/audit', {projets: ids}); toast(ids.length ? 'Audit lancé' : 'Audit lancé sur tous les projets'); setTimeout(charger, 800); }
+  catch(e){ toast(e.message); }
+}
+
+document.addEventListener('click', async e=>{
+  const b = e.target.closest('button, .scrim'); if(!b) return;
+  if(b.id==='scrim' && e.target===b) return fermer();
+  if(b.dataset.fermer !== undefined) return fermer();
+  if(b.dataset.alerte) return ouvrirAlerte(b.dataset.alerte);
+  if(b.dataset.rapport) return ouvrirRapport(b.dataset.rapport);
+  if(b.dataset.auditer) return auditer([b.dataset.auditer], b);
+  if(b.id==='toutAuditer') return auditer([], b);
+  if(b.dataset.vu){
+    try{ await api('/api/alertes/'+b.dataset.vu+'/vu', {}); fermer(); toast('Marquée comme vue'); charger(); }
+    catch(err){ toast(err.message); }
+  }
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') fermer(); });
+
+charger();
+setInterval(charger, 10000);
+</script>
+</body>
+</html>
