@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Poste de pilotage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : bandeau de jauges, puis deux colonnes — à gauche ce qui attend une décision, à droite l'état des projets et le journal. */
+:root{
+  --bg:#f3f4f7; --panel:#ffffff; --ink:#161a24; --muted:#5d6577; --line:#dde1ea; --soft:#eaedf3;
+  --accent:#2f56c9; --accent-ink:#ffffff;
+  --crit:#c4362c; --crit-bg:#fbe9e7; --warn:#a86a00; --warn-bg:#fdf1dc; --ok:#1f7a4d; --ok-bg:#e3f3ea; --run:#2f56c9; --run-bg:#e5ebfb; --idle:#7b8396; --idle-bg:#eceef2;
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"Instrument Sans", system-ui, -apple-system, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f121a; --panel:#171b25; --ink:#e8ebf2; --muted:#9aa2b5; --line:#2a3040; --soft:#202533;
+  --accent:#7d9bf0; --accent-ink:#0f121a;
+  --crit:#f07a6e; --crit-bg:#3a1d1b; --warn:#e7b158; --warn-bg:#352a14; --ok:#5fc796; --ok-bg:#16301f; --run:#7d9bf0; --run-bg:#1d2642; --idle:#8d94a6; --idle-bg:#232836;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f121a; --panel:#171b25; --ink:#e8ebf2; --muted:#9aa2b5; --line:#2a3040; --soft:#202533;
+  --accent:#7d9bf0; --accent-ink:#0f121a;
+  --crit:#f07a6e; --crit-bg:#3a1d1b; --warn:#e7b158; --warn-bg:#352a14; --ok:#5fc796; --ok-bg:#16301f; --run:#7d9bf0; --run-bg:#1d2642; --idle:#8d94a6; --idle-bg:#232836;
+  color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+.wrap{max-width:1280px;margin:0 auto;padding-inline:20px;padding-block:18px 48px;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance}
+h1{font-size:22px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:700}
+.label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer}
+button:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* En-tête */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.sample{font-size:12px;color:var(--warn);background:var(--warn-bg);padding:3px 9px;border-radius:99px;font-weight:600}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:8px;font-weight:600}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{background:var(--crit);color:var(--panel);border-color:var(--crit)}
+.btn.ghost{background:transparent}
+
+/* Jauges */
+.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.gauge{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.gauge .val{font-family:var(--f-display);font-size:26px;font-weight:700;line-height:1}
+.gauge .sub{color:var(--muted);font-size:12.5px}
+.bar{height:6px;border-radius:99px;background:var(--soft);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.bar.warn i{background:var(--warn)}
+.agents{display:flex;gap:6px}
+.agents span{width:22px;height:8px;border-radius:3px;background:var(--soft)}
+.agents span.on{background:var(--run)}
+
+/* Grille principale */
+.main{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:18px;align-items:start}
+@media (max-width:900px){.main{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:18px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.panel-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.count{font-family:var(--f-mono);font-size:12px;background:var(--soft);padding:2px 8px;border-radius:99px;color:var(--muted)}
+
+/* Boîte de décisions */
+.inbox{list-style:none;margin:0;padding:0}
+.item{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:12px;padding:12px 16px 12px 0;border-bottom:1px solid var(--line);cursor:pointer;align-items:start;background:none;border-left:0;border-right:0;border-top:0;width:100%;text-align:left;color:inherit}
+.item:last-child{border-bottom:0}
+.item:hover{background:var(--soft)}
+.item .stripe{align-self:stretch;border-radius:0 3px 3px 0}
+.item .t{font-weight:600}
+.item .meta{color:var(--muted);font-size:12.5px;display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+.item time{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.sev-crit .stripe{background:var(--crit)} .sev-dec .stripe{background:var(--accent)} .sev-sec .stripe{background:var(--warn)} .sev-info .stripe{background:var(--idle)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-crit{color:var(--crit);background:var(--crit-bg)} .p-dec{color:var(--run);background:var(--run-bg)} .p-sec{color:var(--warn);background:var(--warn-bg)} .p-info{color:var(--idle);background:var(--idle-bg)}
+.p-ok{color:var(--ok);background:var(--ok-bg)} .p-run{color:var(--run);background:var(--run-bg)} .p-wait{color:var(--warn);background:var(--warn-bg)} .p-err{color:var(--crit);background:var(--crit-bg)} .p-idle{color:var(--idle);background:var(--idle-bg)}
+.empty{padding:28px 16px;color:var(--muted);text-align:center}
+
+/* Nouvelle demande */
+form.ask{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+select{flex:1 1 140px}
+textarea{width:100%;min-height:68px;resize:vertical}
+.ask .foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.check{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+
+/* Projets */
+.projects{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1px;background:var(--line)}
+.proj{background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.proj-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.proj h3{font-size:15px;font-weight:700}
+.proj .task{font-size:13px;min-height:2.9em}
+.proj .facts{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px;border-top:1px dashed var(--line);padding-top:8px}
+.spark{display:flex;gap:2px;align-items:flex-end;height:18px}
+.spark i{width:5px;border-radius:1px;background:var(--soft)}
+.spark i.u{background:var(--accent)}
+
+/* Planning + journal */
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:640px){.split{grid-template-columns:minmax(0,1fr)}}
+.plan,.log{list-style:none;margin:0;padding:6px 0}
+.plan li,.log li{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;padding:8px 16px;font-size:13px}
+.plan li span:first-child,.log li span:first-child{font-family:var(--f-mono);color:var(--muted);font-size:12px;padding-top:1px}
+.log li b{font-weight:600}
+
+/* Panneau de détail */
+.scrim{position:fixed;inset:0;background:rgba(10,14,24,.45);display:flex;justify-content:flex-end;z-index:20}
+.drawer{background:var(--panel);width:min(560px,100%);height:100%;overflow-y:auto;padding:22px 22px calc(28px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:16px;border-left:1px solid var(--line);padding-top:calc(22px + env(safe-area-inset-top,0px))}
+.drawer h2{font-size:20px}
+.drawer p{margin:0;max-width:62ch}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 14px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+.files{font-family:var(--f-mono);font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow-x:auto;white-space:pre}
+.add{color:var(--ok)} .del{color:var(--crit)}
+.shots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.shot{aspect-ratio:4/3;border-radius:6px;border:1px solid var(--line);background:repeating-linear-gradient(135deg,var(--soft) 0 8px,var(--bg) 8px 16px);display:flex;align-items:flex-end;padding:6px;font-size:11px;color:var(--muted);max-width:100%}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;padding-top:8px;border-top:1px solid var(--line)}
+.close{align-self:flex-end;border:0;background:none;color:var(--muted);font-size:13px;padding:4px}
+
+/* Notification */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:500;z-index:30;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:no-preference){.toast{animation:up .2s ease-out}@keyframes up{from{transform:translate(-50%,8px);opacity:.6}}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Poste de pilotage</h1>
+      <span class="sample">Maquette · données d'exemple</span>
+    </div>
+    <div class="row">
+      <button class="btn" id="pauseBtn" type="button">Mettre la file en pause</button>
+      <button class="btn primary" type="button" id="askJump">Nouvelle demande</button>
+    </div>
+  </header>
+
+  <section class="gauges" aria-label="État général">
+    <div class="gauge">
+      <span class="label">Quota · fenêtre en cours</span>
+      <span class="val mono">62 %</span>
+      <div class="bar"><i style="width:62%"></i></div>
+      <span class="sub">Remise à zéro à 14:20 · compte Max</span>
+    </div>
+    <div class="gauge">
+      <span class="label">Quota · semaine</span>
+      <span class="val mono">41 %</span>
+      <div class="bar"><i style="width:41%"></i></div>
+      <span class="sub">Rythme normal, rien à craindre d'ici lundi</span>
+    </div>
+    <div class="gauge">
+      <span class="label">Agents au travail</span>
+      <span class="val mono" id="agentsVal">2 / 3</span>
+      <div class="agents" id="agentsBar"><span class="on"></span><span class="on"></span><span></span></div>
+      <span class="sub">Ligue · CD69</span>
+    </div>
+    <div class="gauge">
+      <span class="label">File d'attente</span>
+      <span class="val mono" id="queueVal">9</span>
+      <div class="bar warn"><i id="queueBar" style="width:45%"></i></div>
+      <span class="sub" id="queueSub">tâches en attente sur 6 projets</span>
+    </div>
+  </section>
+
+  <div class="main">
+    <div class="col">
+      <section class="panel" aria-labelledby="inboxTitle">
+        <div class="panel-h"><h2 id="inboxTitle">À décider</h2><span class="count" id="inboxCount"></span></div>
+        <div id="inbox"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="askTitle" id="askPanel">
+        <div class="panel-h"><h2 id="askTitle">Nouvelle demande</h2></div>
+        <form class="ask" id="askForm">
+          <div class="row">
+            <select id="askProject" aria-label="Projet"></select>
+            <select id="askPrio" aria-label="Priorité">
+              <option value="normale">Priorité normale</option>
+              <option value="haute">Priorité haute</option>
+              <option value="nuit">Cette nuit</option>
+            </select>
+          </div>
+          <textarea id="askText" aria-label="Ce qu'il faut faire" placeholder="Ex. : ajouter un filtre par date sur la page des réservations">Ajouter un filtre par date sur la page des réservations</textarea>
+          <div class="foot">
+            <label class="check"><input type="checkbox" id="askProd" checked> Me demander avant la mise en prod</label>
+            <button class="btn primary" type="submit">Ajouter à la file</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel" aria-labelledby="projTitle">
+        <div class="panel-h"><h2 id="projTitle">Projets</h2><span class="label">Usage du quota, 7 jours</span></div>
+        <div class="projects" id="projects"></div>
+      </section>
+
+      <div class="split">
+        <section class="panel" aria-labelledby="planTitle">
+          <div class="panel-h"><h2 id="planTitle">Cette nuit</h2><span class="label">en lecture seule</span></div>
+          <ul class="plan">
+            <li><span>01:00</span><span>Audit de sécurité des 9 projets</span></li>
+            <li><span>02:30</span><span>Dépendances, certificats, en-têtes HTTP</span></li>
+            <li><span>03:30</span><span>Tests complets sur les bases jetables</span></li>
+            <li><span>05:00</span><span>Propositions de fonctionnalités</span></li>
+            <li><span>07:30</span><span>Résumé envoyé sur votre téléphone</span></li>
+          </ul>
+        </section>
+        <section class="panel" aria-labelledby="logTitle">
+          <div class="panel-h"><h2 id="logTitle">Journal</h2><span class="label">aujourd'hui</span></div>
+          <ul class="log" id="log"></ul>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" hidden>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle"></aside>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const projects = [
+  {id:"lmo", name:"LMO", state:"wait", task:"Attend votre ok : relance des dossiers incomplets", audit:"cette nuit", queue:3, use:[3,5,4,6,7,5,6]},
+  {id:"ligue", name:"Ligue hockey", state:"run", task:"Agent en cours : calendrier des matchs · 18 min", audit:"cette nuit", queue:2, use:[6,7,8,6,7,8,7]},
+  {id:"cd69", name:"CD69", state:"run", task:"Agent en cours : formulaire de licence · 6 min", audit:"cette nuit", queue:1, use:[2,3,2,4,3,5,4]},
+  {id:"fideloc", name:"Fidéloc'", state:"err", task:"Site en erreur 500 depuis 7 h 42", audit:"hier", queue:1, use:[1,1,2,1,1,2,5]},
+  {id:"beausejour", name:"Beauséjour", state:"ok", task:"Rien en cours · 1 proposition à trier", audit:"cette nuit", queue:0, use:[2,1,2,3,1,2,2]},
+  {id:"ol", name:"OL suivi joueurs", state:"idle", task:"En pause depuis mardi, à votre demande", audit:"mardi", queue:2, use:[5,6,4,0,0,0,0]},
+  {id:"plan2", name:"Plan2Sécurité", state:"ok", task:"Rien en cours", audit:"cette nuit", queue:0, use:[1,0,1,1,0,1,1]},
+  {id:"angelos", name:"Angelos", state:"ok", task:"Rien en cours", audit:"cette nuit", queue:0, use:[0,1,0,1,0,0,1]},
+  {id:"garance", name:"Mas de Garance", state:"ok", task:"Proposition envoyée, attend le retour du client", audit:"cette nuit", queue:0, use:[0,0,1,0,0,0,0]}
+];
+const stateLabel = {ok:"Au calme", run:"En cours", wait:"Attend votre ok", err:"En erreur", idle:"En pause"};
+
+const decisions = [
+  {id:1, sev:"crit", proj:"fideloc", time:"07:46", title:"Le site ne répond plus",
+   body:"La page /catalogue renvoie une erreur 500 depuis 7 h 42. Les journaux du serveur indiquent que l'extension PHP intl n'est plus chargée, sans doute après une mise à jour chez l'hébergeur. L'agent a préparé un correctif qui se passe de cette extension.",
+   kv:[["Branche","fix/catalogue-sans-intl"],["Tests","22 / 22 réussis"],["Recette","copie isolée, catalogue affiché"],["Retour arrière","copie du site prise à 7:51"]],
+   files:"coeur/format.php        +18  −6\ncatalogue/index.php      +2  −2",
+   shots:["Avant : erreur 500","Après : catalogue","Après : fiche produit"],
+   actions:[{k:"prod",label:"Mettre en prod le correctif",style:"primary",confirm:"Confirmer la mise en prod",done:"Correctif mis en prod sur Fidéloc'"},{k:"me",label:"Je regarde moi-même",done:"Noté, l'agent ne touche plus à Fidéloc'"}]},
+  {id:2, sev:"dec", proj:"lmo", time:"06:12", title:"PR prête : relance des dossiers incomplets",
+   body:"Chaque lundi, les familles dont le dossier d'inscription est incomplet reçoivent un mail qui liste les pièces manquantes. La direction peut couper la relance dossier par dossier.",
+   kv:[["Branche","feat/relances-dossiers"],["Tests","48 / 48 réussis"],["Recette","base jetable, 12 dossiers fictifs"],["Données","aucun changement de structure"]],
+   files:"coeur/relances.php       +164\ndirection/dossiers.php   +31  −9\ntaches/relances.php      +17  −5",
+   shots:["Mail reçu par une famille","Bouton côté direction","Liste des relances"],
+   actions:[{k:"prod",label:"Valider et mettre en prod",style:"primary",confirm:"Confirmer la mise en prod",done:"LMO : relances mises en prod"},{k:"pr",label:"Valider sans déployer",done:"LMO : PR fusionnée, déploiement à votre main"},{k:"no",label:"Demander une modification",done:"Renvoyée à l'agent avec vos remarques"}]},
+  {id:3, sev:"sec", proj:"ligue", time:"03:04", title:"Audit de nuit : 2 points moyens",
+   body:"Le formulaire de contact n'a pas de limite d'envois : un robot peut le saturer. Et l'en-tête Content-Security-Policy est absent sur toutes les pages. Aucune faille grave.",
+   kv:[["Gravité","moyenne, aucune urgence"],["Effort estimé","2 tâches courtes"],["Dernier audit","il y a 7 jours, rien trouvé"]],
+   actions:[{k:"tasks",label:"Créer les 2 tâches",style:"primary",done:"2 tâches ajoutées à la file de la Ligue"},{k:"ign",label:"Ignorer",done:"Points ignorés jusqu'au prochain audit"}]},
+  {id:4, sev:"dec", proj:"beausejour", time:"05:20", title:"Proposition : suivi des devis de travaux",
+   body:"Le conseil syndical reçoit les devis par mail et les compare à la main. L'agent propose une page qui les range par chantier, avec le montant, le prestataire et la date de validité.",
+   kv:[["Type","proposition de l'agent"],["Effort estimé","une demi-journée d'agent"],["Quota estimé","~8 % de la semaine"]],
+   actions:[{k:"bk",label:"Ajouter au backlog",style:"primary",done:"Beauséjour : ajouté au backlog"},{k:"no",label:"Écarter",done:"Proposition écartée"}]},
+  {id:5, sev:"info", proj:"cd69", time:"02:10", title:"Sauvegarde de la base vérifiée",
+   body:"La sauvegarde de la nuit a été restaurée sur une base jetable : 3 clubs et 214 licenciés retrouvés, identiques à la veille.",
+   kv:[["Taille","4,2 Mo"],["Durée de la vérification","38 s"]],
+   actions:[{k:"ok",label:"Vu",style:"primary",done:"Marqué comme vu"}]}
+];
+const sevLabel = {crit:"Urgent", dec:"Décision", sec:"Sécurité", info:"Info"};
+
+const log = [
+  ["07:51","Fidéloc'","copie du site prise avant correctif"],
+  ["07:46","Fidéloc'","alerte urgente envoyée sur le téléphone"],
+  ["07:30","Tous","résumé de la nuit envoyé"],
+  ["06:12","LMO","PR prête, recette réussie"],
+  ["05:20","Beauséjour","1 proposition rédigée"],
+  ["03:04","Ligue hockey","audit terminé, 2 points"],
+  ["02:10","CD69","sauvegarde vérifiée"]
+];
+
+const $ = s => document.querySelector(s);
+const pname = id => projects.find(p => p.id === id).name;
+let paused = false, toastTimer;
+
+function toast(msg){
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 2800);
+}
+function now(){ const d = new Date(); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+
+function renderInbox(){
+  const box = $("#inbox");
+  $("#inboxCount").textContent = decisions.length;
+  if(!decisions.length){ box.innerHTML = '<p class="empty">Rien à décider. Les agents continuent sans vous.</p>'; return; }
+  const order = {crit:0, sec:1, dec:2, info:3};
+  box.innerHTML = '<div class="inbox">' + [...decisions].sort((a,b)=>order[a.sev]-order[b.sev]).map(d => `
+    <button type="button" class="item sev-${d.sev}" data-id="${d.id}">
+      <span class="stripe"></span>
+      <span><span class="t">${d.title}</span>
+        <span class="meta"><span class="pill p-${d.sev}">${sevLabel[d.sev]}</span><span>${pname(d.proj)}</span></span></span>
+      <time>${d.time}</time>
+    </button>`).join("") + '</div>';
+  box.querySelectorAll(".item").forEach(b => b.onclick = () => openDrawer(+b.dataset.id));
+}
+
+function renderProjects(){
+  const max = 8;
+  $("#projects").innerHTML = projects.map(p => `
+    <article class="proj">
+      <div class="proj-h"><h3>${p.name}</h3><span class="pill p-${p.state}">${stateLabel[p.state]}</span></div>
+      <div class="task">${p.task}</div>
+      <div class="facts">
+        <span>Audit : ${p.audit}</span>
+        <span class="mono">${p.queue} en file</span>
+        <span class="spark" aria-label="Usage du quota sur 7 jours">${p.use.map((u,i)=>`<i class="${i===6?'u':''}" style="height:${Math.max(2,u/max*18)}px;${i<6&&u?'background:var(--muted);opacity:.45':''}"></i>`).join("")}</span>
+      </div>
+    </article>`).join("");
+  const q = projects.reduce((s,p)=>s+p.queue,0);
+  const n = projects.filter(p=>p.queue).length;
+  $("#queueVal").textContent = q;
+  $("#queueBar").style.width = Math.min(100,q*5)+"%";
+  $("#queueSub").textContent = paused ? "file en pause, rien ne démarre" : `tâches en attente sur ${n} projets`;
+}
+
+function renderLog(){
+  $("#log").innerHTML = log.slice(0,8).map(([t,p,m]) => `<li><span>${t}</span><span><b>${p}</b> · ${m}</span></li>`).join("");
+}
+
+function openDrawer(id){
+  const d = decisions.find(x => x.id === id);
+  const dr = $("#drawer");
+  dr.innerHTML = `
+    <button type="button" class="close" id="dClose">Fermer ✕</button>
+    <div class="row"><span class="pill p-${d.sev}">${sevLabel[d.sev]}</span><span class="label">${pname(d.proj)} · ${d.time}</span></div>
+    <h2 id="dTitle">${d.title}</h2>
+    <p>${d.body}</p>
+    <dl class="kv">${d.kv.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+    ${d.files ? `<div><div class="label" style="margin-bottom:6px">Fichiers modifiés</div><div class="files">${d.files.replace(/\+\d+/g,m=>`<span class="add">${m}</span>`).replace(/−\d+/g,m=>`<span class="del">${m}</span>`)}</div></div>` : ""}
+    ${d.shots ? `<div><div class="label" style="margin-bottom:6px">Captures de la recette</div><div class="shots">${d.shots.map(s=>`<div class="shot">${s}</div>`).join("")}</div></div>` : ""}
+    <div class="actions">${d.actions.map((a,i)=>`<button type="button" class="btn ${a.style||''}" data-i="${i}">${a.label}</button>`).join("")}</div>`;
+  $("#scrim").hidden = false;
+  $("#dClose").onclick = closeDrawer;
+  $("#dClose").focus();
+  dr.querySelectorAll(".actions .btn").forEach(b => b.onclick = () => {
+    const a = d.actions[+b.dataset.i];
+    if(a.confirm && !b.dataset.armed){
+      b.dataset.armed = "1"; b.textContent = a.confirm; b.classList.remove("primary"); b.classList.add("danger"); return;
+    }
+    resolve(d, a);
+  });
+}
+function closeDrawer(){ $("#scrim").hidden = true; }
+$("#scrim").addEventListener("click", e => { if(e.target.id === "scrim") closeDrawer(); });
+document.addEventListener("keydown", e => { if(e.key === "Escape") closeDrawer(); });
+
+function resolve(d, a){
+  decisions.splice(decisions.indexOf(d), 1);
+  const p = projects.find(x => x.id === d.proj);
+  if(a.k === "prod"){ p.state = "ok"; p.task = "Mis en prod à " + now() + " · contrôles réussis"; }
+  if(a.k === "pr"){ p.state = "ok"; p.task = "PR fusionnée, déploiement à faire"; }
+  if(a.k === "me"){ p.state = "idle"; p.task = "Agent suspendu, vous avez la main"; }
+  if(a.k === "no"){ if(p.state === "wait"){ p.state = "run"; p.task = "Agent en cours : reprise avec vos remarques"; } }
+  if(a.k === "tasks"){ p.queue += 2; }
+  if(a.k === "bk"){ p.queue += 1; }
+  log.unshift([now(), p.name, a.done.replace(/^[^:]+: /,"").toLowerCase()]);
+  closeDrawer(); renderAll(); toast(a.done);
+}
+
+$("#askProject").innerHTML = projects.map(p => `<option value="${p.id}" ${p.id==="fideloc"?"selected":""}>${p.name}</option>`).join("");
+$("#askForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const txt = $("#askText").value.trim();
+  if(!txt){ toast("Décrivez la tâche avant de l'ajouter"); $("#askText").focus(); return; }
+  const p = projects.find(x => x.id === $("#askProject").value);
+  p.queue += 1;
+  const prio = $("#askPrio").value;
+  log.unshift([now(), p.name, "demande ajoutée" + (prio==="haute" ? ", priorité haute" : prio==="nuit" ? ", prévue cette nuit" : "")]);
+  $("#askText").value = "";
+  renderAll(); toast("Ajoutée à la file de " + p.name);
+});
+$("#askJump").onclick = () => { $("#askPanel").scrollIntoView({behavior:"smooth", block:"center"}); $("#askText").focus({preventScroll:true}); };
+
+$("#pauseBtn").onclick = () => {
+  paused = !paused;
+  $("#pauseBtn").textContent = paused ? "Relancer la file" : "Mettre la file en pause";
+  $("#pauseBtn").classList.toggle("primary", paused);
+  log.unshift([now(), "Tous", paused ? "file mise en pause, les agents en cours terminent" : "file relancée"]);
+  renderAll(); toast(paused ? "File en pause : aucun nouvel agent ne démarre" : "File relancée");
+};
+
+function renderAll(){ renderInbox(); renderProjects(); renderLog(); }
+renderAll();
+</script>
+</body>
+</html>
