@@ -2,7 +2,7 @@
 // Commande donnée à Claude pendant une conversation : zylot garder "message" | zylot deployer | zylot etat.
 // Elle ne fait que demander au serveur Zylot, qui vérifie le jeton de la conversation et la demande du propriétaire.
 const action = process.argv[2];
-if (!['garder', 'deployer', 'etat'].includes(action)) { console.error('Usage : zylot garder | zylot deployer | zylot etat'); process.exit(2); }
+if (!['garder', 'deployer', 'pousser', 'etat'].includes(action)) { console.error('Usage : zylot garder "message" | zylot deployer | zylot pousser | zylot etat'); process.exit(2); }
 const { ZYLOT_PROJET: projet, ZYLOT_JETON: jeton, ZYLOT_PORT: port = '4000' } = process.env;
 if (!projet || !jeton) { console.error('zylot ne fonctionne que dans une conversation lancée par Zylot.'); process.exit(2); }
 fetch(`http://localhost:${port}/api/agent/${projet}/${action}`, {

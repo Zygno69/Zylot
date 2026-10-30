@@ -172,13 +172,14 @@ http.createServer(async (req, res) => {
   if (mc && req.method === 'GET' && !mc[2]) return json(res, 200, { ...conversation.etat(projetConv.id), suggestions: await suggestionsProjet(projetConv) });
 
   // Appels de la commande `zylot`, lancée par Claude pendant une conversation.
-  const ma = url.pathname.match(/^\/api\/agent\/([a-z0-9-]+)\/(garder|deployer|etat)$/);
+  const ma = url.pathname.match(/^\/api\/agent\/([a-z0-9-]+)\/(garder|deployer|pousser|etat)$/);
   if (ma && req.method === 'POST') {
     const p = S.projets().find(x => x.id === ma[1]);
     if (!p || req.headers['x-zylot'] !== '1' || !conversation.jetonValide(p.id, req.headers['x-zylot-jeton'])) return json(res, 403, { erreur: 'Refusé : pas de conversation en cours pour ce projet.' });
     if (ma[2] === 'etat') return json(res, 200, { message: await contexteProjet(p) });
     const { message } = await corps(req);
     if (ma[2] === 'garder') return json(res, 200, await conversation.garder(p, message));
+    if (ma[2] === 'pousser') return json(res, 200, await conversation.pousser(p));
     return json(res, 200, await conversation.deployer(p, () => verifierApresMiseEnLigne(p), message));
   }
 
