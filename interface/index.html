@@ -127,7 +127,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
       <span class="label">Projets vus</span>
       <span class="val mono" id="gVus">–</span>
       <div class="bar"><i id="gVusBar" style="width:0"></i></div>
-      <span class="sub">audités ces dernières 24 h</span>
+      <span class="sub">audités ces 7 derniers jours</span>
     </div>
     <div class="gauge">
       <span class="label">Audit</span>
@@ -136,9 +136,9 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
       <span class="sub" id="gAuditSub"></span>
     </div>
     <div class="gauge">
-      <span class="label">Prochain audit de nuit</span>
-      <span class="val mono">01:00</span>
-      <span class="sub">en lecture seule, l'un après l'autre</span>
+      <span class="label">Prochain audit</span>
+      <span class="val" id="gProchain" style="font-size:20px">–</span>
+      <span class="sub">chaque lundi à 1 h, en lecture seule</span>
     </div>
   </section>
 
@@ -220,7 +220,7 @@ function rendre(){
   $('#gAlertes').textContent = alertes.length;
   const nUrg = alertes.filter(a=>a.gravite==='urgent').length, nSec = alertes.filter(a=>a.gravite==='securite').length;
   $('#gAlertesSub').textContent = alertes.length ? `${nUrg} urgent · ${nSec} sécurité · ${alertes.length-nUrg-nSec} info` : 'rien en attente';
-  const vus = projets.filter(p=>p.dernier && !p.dernier.erreur && Date.now()-new Date(p.dernier.quand) < 864e5).length;
+  const vus = projets.filter(p=>p.dernier && !p.dernier.erreur && Date.now()-new Date(p.dernier.quand) < 7*864e5).length;
   $('#gVus').textContent = `${vus} / ${projets.length}`;
   $('#gVusBar').style.width = (projets.length ? vus/projets.length*100 : 0) + '%';
   if(enCours){
@@ -235,6 +235,11 @@ function rendre(){
     $('#gAuditBarWrap').hidden = true;
   }
   $('#toutAuditer').disabled = !!enCours;
+  // Prochain lundi 1 h (aujourd'hui si on est lundi avant 1 h)
+  const pr = new Date(); pr.setHours(1,0,0,0);
+  pr.setDate(pr.getDate() + ((8 - pr.getDay()) % 7));
+  if(pr <= new Date()) pr.setDate(pr.getDate() + 7);
+  $('#gProchain').textContent = pr.toLocaleDateString('fr-FR',{weekday:'long', day:'numeric', month:'long'});
 
   // À décider
   $('#inboxCount').textContent = alertes.length;

@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Installe Zylot dans le planificateur de macOS (launchd) :
 #   - le serveur de l'interface, toujours allumé, relancé s'il tombe ;
-#   - l'audit de nuit, chaque jour à 1 h.
+#   - l'audit, chaque semaine dans la nuit du dimanche au lundi, à 1 h.
 # ./installer/installer.sh            → installe (ou réinstalle)
 # ./installer/installer.sh retirer    → retire les deux
 set -e
@@ -40,10 +40,10 @@ EOF
 
 ecrire serveur serveur.js '  <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>'
-ecrire nuit nuit.js '  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>1</integer><key>Minute</key><integer>0</integer></dict>'
+ecrire nuit nuit.js '  <key>StartCalendarInterval</key><dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>1</integer><key>Minute</key><integer>0</integer></dict>'
 
 echo "Zylot installé :"
 echo "  interface    http://localhost:4000"
-echo "  audit        chaque nuit à 1 h"
-echo "Pour que le Mac se réveille seul à 0 h 55 (mot de passe demandé) :"
-echo "  sudo pmset repeat wakeorpoweron MTWRFSU 00:55:00"
+echo "  audit        chaque lundi à 1 h"
+echo "Pour que le Mac se réveille seul le lundi à 0 h 55 (mot de passe demandé) :"
+echo "  sudo pmset repeat wakeorpoweron M 00:55:00"
