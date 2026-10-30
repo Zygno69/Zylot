@@ -79,7 +79,7 @@ async function preparerAtelier(p, c) {
   }
   const head = await git(p.dossier, ['rev-parse', 'HEAD']);
   if (!head.ok) return 'Ce projet n\'a pas encore de commit : Claude a besoin d\'un point de départ enregistré dans git.';
-  const branche = 'zylot/' + p.id + '-' + new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  const branche = 'zylot/' + p.id + '-' + new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '') + '-' + crypto.randomBytes(2).toString('hex');
   const chemin = path.join(ATELIERS, p.id);
   if (fs.existsSync(chemin)) { await git(p.dossier, ['worktree', 'remove', '--force', chemin]); fs.rmSync(chemin, { recursive: true, force: true }); }
   await git(p.dossier, ['worktree', 'prune']);
