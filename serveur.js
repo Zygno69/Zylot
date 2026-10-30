@@ -1,14 +1,50 @@
 #!/usr/bin/env node
 // L'interface de Zylot, sur http://localhost:4000 — accessible depuis ce Mac seulement.
+// Le serveur fait aussi tourner la surveillance des sites (toutes les 5 min) et les contrôles de sécurité (chaque jour).
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const S = require('./coeur/stockage');
+const surveillance = require('./coeur/surveillance');
+const securite = require('./coeur/securite');
+const depots = require('./coeur/depots');
+const { prevenir } = require('./coeur/prevenir');
 
 const { port } = S.config();
-const HOTES = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
+// zylot.localhost : un nom à mettre en favori (Chrome et Firefox le reconnaissent seuls ; Safari a besoin d'une ligne dans /etc/hosts).
+const HOTES = new Set([`zylot.localhost:${port}`, `localhost:${port}`, `127.0.0.1:${port}`, 'zylot.localhost', 'localhost', '127.0.0.1']);
 
+// --- Tâches de fond ---
+let surveillanceEnCours = false, securiteEnCours = false;
+async function surveiller() {
+  if (surveillanceEnCours) return;
+  surveillanceEnCours = true;
+  try { await surveillance.tour(prevenir); } catch (e) { console.error('surveillance', e); }
+  surveillanceEnCours = false;
+}
+async function controlerSecurite(forcer = false) {
+  if (securiteEnCours) return;
+  const d = Object.values(securite.derniers()).map(x => x.quand).sort()[0];
+  if (!forcer && d && Date.now() - new Date(d) < 864e5) return;
+  securiteEnCours = true;
+  try { await securite.tour(prevenir); } catch (e) { console.error('securite', e); }
+  securiteEnCours = false;
+}
+setTimeout(surveiller, 2000);
+setInterval(surveiller, 5 * 60e3);
+setTimeout(() => controlerSecurite(), 20e3);
+setInterval(() => controlerSecurite(), 60 * 60e3);
+setInterval(() => S.projets().forEach(p => surveillance.elaguer(p.id)), 24 * 36e5);
+
+// L'état des dépôts change peu : on le relit au plus toutes les 30 s.
+let cacheDepots = { quand: 0, valeur: {} };
+async function etatDepots() {
+  if (Date.now() - cacheDepots.quand > 30e3) cacheDepots = { quand: Date.now(), valeur: await depots.tous(S.projets()) };
+  return cacheDepots.valeur;
+}
+
+// --- Réponses ---
 function json(res, code, valeur) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(valeur));
@@ -22,12 +58,22 @@ function corps(req) {
   });
 }
 
-function etat() {
+async function etat() {
+  const alertes = S.alertesOuvertes();
+  const secu = securite.derniers();
+  const dep = await etatDepots();
   const projets = S.projets().map(p => {
     const r = S.dernierRapport(p.id);
+    const surv = p.site ? surveillance.resume(p.id) : null;
+    const controle = secu[p.id] || null;
+    const ouvertes = alertes.filter(a => a.projet === p.id);
     return {
-      id: p.id, nom: p.nom, site: p.site, note: p.note || null,
+      id: p.id, nom: p.nom, site: p.site, note: p.note || null, admin: p.admin || null,
       dossierExiste: fs.existsSync(p.dossier),
+      depot: dep[p.id] || null,
+      surveillance: surv,
+      securite: controle,
+      notation: (controle || ouvertes.length) ? securite.note(controle, surv && surv.etat && surv.etat.cert, ouvertes) : null,
       dernier: r && {
         quand: r.quand, duree: r.duree, erreur: r.erreur || null, etat: r.etat || null,
         resume: r.resume || null, site: r.site || null, nbAlertes: (r.alertes || []).length,
@@ -35,7 +81,7 @@ function etat() {
       },
     };
   });
-  return { projets, alertes: S.alertesOuvertes(), journal: S.lireJournal(30), enCours: S.verrou() };
+  return { projets, alertes, journal: S.lireJournal(40), enCours: S.verrou(), securiteEnCours, maintenant: new Date().toISOString() };
 }
 
 function lancerAudit(ids) {
@@ -54,7 +100,7 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     return fs.createReadStream(path.join(S.RACINE, 'interface', 'index.html')).pipe(res);
   }
-  if (req.method === 'GET' && url.pathname === '/api/etat') return json(res, 200, etat());
+  if (req.method === 'GET' && url.pathname === '/api/etat') return json(res, 200, await etat());
 
   if (req.method === 'POST') {
     // Un en-tête maison : un autre site ne peut pas l'envoyer sans autorisation CORS, que Zylot ne donne jamais.
@@ -75,6 +121,11 @@ http.createServer(async (req, res) => {
       lancerAudit(ids);
       return json(res, 202, { ok: true });
     }
+    if (url.pathname === '/api/surveillance') { surveiller(); return json(res, 202, { ok: true }); }
+    if (url.pathname === '/api/securite') {
+      if (securiteEnCours) return json(res, 409, { erreur: 'Contrôles déjà en cours' });
+      controlerSecurite(true); return json(res, 202, { ok: true });
+    }
   }
   json(res, 404, { erreur: 'Introuvable' });
-}).listen(port, '127.0.0.1', () => console.log(`Zylot : http://localhost:${port}`));
+}).listen(port, '127.0.0.1', () => console.log(`Zylot : http://zylot.localhost:${port}`));

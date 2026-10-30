@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* Bandeau d'état, puis deux colonnes : à gauche ce qui attend une décision, à droite les projets et le journal. */
+/* En-tête + onglets ; chaque onglet : un bandeau de synthèse, puis le détail. */
 :root{
   --bg:#f3f4f7; --panel:#ffffff; --ink:#161a24; --muted:#5d6577; --line:#dde1ea; --soft:#eaedf3;
   --accent:#2f56c9; --accent-ink:#ffffff;
@@ -30,16 +30,14 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);fo
 h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance}
 h1{font-size:22px;font-weight:700;letter-spacing:-.01em}
 h2{font-size:15px;font-weight:700}
+h3{font-size:15px;font-weight:700}
+a{color:var(--accent)}
 .label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
 button{font:inherit;cursor:pointer}
 button:disabled{opacity:.5;cursor:default}
-button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-
-.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
-.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-.lien{font-size:12px;color:var(--muted)}
-.lien.off{color:var(--crit)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:8px;font-weight:600}
 .btn:hover:not(:disabled){border-color:var(--muted)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
@@ -47,53 +45,102 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btn.small{padding:4px 10px;font-size:12.5px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 
-.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-.gauge{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
-.gauge .val{font-family:var(--f-display);font-size:26px;font-weight:700;line-height:1}
-.gauge .sub{color:var(--muted);font-size:12.5px}
-.bar{height:6px;border-radius:99px;background:var(--soft);overflow:hidden}
-.bar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+/* En-tête et onglets */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.lien{font-size:12px;color:var(--muted)}
+.lien.off{color:var(--crit)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{border:0;background:none;color:var(--muted);padding:10px 14px;font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;display:flex;gap:8px;align-items:center}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab .count{font-size:11px}
+.synthese{font-family:var(--f-display);font-size:19px;font-weight:500;margin:0;text-wrap:balance}
+.synthese b{font-weight:700}
 
-.main{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:18px;align-items:start}
-@media (max-width:900px){.main{grid-template-columns:minmax(0,1fr)}}
+/* Bandeau de chiffres */
+.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.gauge{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.gauge .val{font-family:var(--f-display);font-size:26px;font-weight:700;line-height:1.05}
+.gauge .sub{color:var(--muted);font-size:12.5px}
+
+/* Panneaux */
+.main{display:grid;grid-template-columns:minmax(0,8fr) minmax(0,4fr);gap:18px;align-items:start}
+@media (max-width:980px){.main{grid-template-columns:minmax(0,1fr)}}
 .col{display:flex;flex-direction:column;gap:18px;min-width:0}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.panel-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.panel-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .count{font-family:var(--f-mono);font-size:12px;background:var(--soft);padding:2px 8px;border-radius:99px;color:var(--muted)}
+.empty{padding:24px 16px;color:var(--muted);text-align:center;margin:0}
 
-.item{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:12px;padding:12px 16px 12px 0;border:0;border-bottom:1px solid var(--line);cursor:pointer;align-items:start;background:none;width:100%;text-align:left;color:inherit}
+/* Pastilles */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-rouge,.p-urgent{color:var(--crit);background:var(--crit-bg)} .p-orange,.p-securite{color:var(--warn);background:var(--warn-bg)}
+.p-vert{color:var(--ok);background:var(--ok-bg)} .p-gris,.p-info{color:var(--idle);background:var(--idle-bg)} .p-bleu{color:var(--run);background:var(--run-bg)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;display:inline-block}
+.d-rouge{background:var(--crit)} .d-orange{background:var(--warn)} .d-vert{background:var(--ok)} .d-gris{background:var(--idle)}
+.t-rouge{color:var(--crit)} .t-orange{color:var(--warn)} .t-vert{color:var(--ok)}
+
+/* Tableau de la vue d'ensemble */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:var(--soft)}
+td .nom{display:flex;gap:9px;align-items:center;font-weight:600;font-size:14px}
+td .s{color:var(--muted);font-size:12px;margin-top:2px}
+.grade{font-family:var(--f-display);font-weight:700;font-size:18px;width:30px;height:30px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center}
+.g-A,.g-B{color:var(--ok);background:var(--ok-bg)} .g-C{color:var(--warn);background:var(--warn-bg)} .g-D,.g-E{color:var(--crit);background:var(--crit-bg)} .g-x{color:var(--idle);background:var(--idle-bg)}
+.liens{display:flex;gap:8px;flex-wrap:wrap;font-size:12.5px}
+@media (max-width:700px){
+  table,thead,tbody,tr,td{display:block} thead{display:none}
+  tbody tr{border-bottom:1px solid var(--line);padding:10px 4px}
+  td{border:0;padding:4px 12px}
+}
+
+/* Liste « à regarder » */
+.item{display:grid;grid-template-columns:4px minmax(0,1fr);gap:12px;padding:11px 16px 11px 0;border:0;border-bottom:1px solid var(--line);background:none;width:100%;text-align:left;color:inherit;cursor:pointer}
 .item:last-child{border-bottom:0}
 .item:hover{background:var(--soft)}
 .item .stripe{align-self:stretch;border-radius:0 3px 3px 0}
 .item .t{font-weight:600}
 .item .meta{color:var(--muted);font-size:12.5px;display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
-.item time{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
-.g-urgent .stripe{background:var(--crit)} .g-securite .stripe{background:var(--warn)} .g-info .stripe{background:var(--idle)}
-.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
-.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
-.p-urgent{color:var(--crit);background:var(--crit-bg)} .p-securite,.p-attention{color:var(--warn);background:var(--warn-bg)} .p-info,.p-jamais{color:var(--idle);background:var(--idle-bg)}
-.p-ok{color:var(--ok);background:var(--ok-bg)} .p-run{color:var(--run);background:var(--run-bg)} .p-erreur{color:var(--crit);background:var(--crit-bg)}
-.empty{padding:28px 16px;color:var(--muted);text-align:center;margin:0}
+.s-urgent{background:var(--crit)} .s-securite{background:var(--warn)} .s-info{background:var(--idle)}
 
-.projects{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1px;background:var(--line)}
-.proj{background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
-.proj-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.proj h3{font-size:15px;font-weight:700}
-.proj .task{font-size:13px;flex:1}
-.proj .facts{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--muted);font-size:12px;border-top:1px dashed var(--line);padding-top:8px}
-.proj .site{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+/* Cartes (surveillance, sécurité) */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.card .url{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.chiffres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.chiffres div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.chiffres b{display:block;font-family:var(--f-mono);font-size:15px;font-variant-numeric:tabular-nums}
+.chiffres span{font-size:11px;color:var(--muted)}
+.barres{display:flex;align-items:flex-end;gap:2px;height:44px;border-bottom:1px solid var(--line);padding-top:4px}
+.barres i{flex:1;background:var(--accent);opacity:.75;border-radius:2px 2px 0 0;min-height:2px}
+.barres i.vide{background:var(--soft);opacity:1}
+.barres i.panne{background:var(--crit);opacity:1}
+.axe{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:var(--f-mono)}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.checks li{display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px}
+.checks .k{font-weight:700}
+.grosse{font-family:var(--f-display);font-weight:700;font-size:34px;width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex:none}
 
+/* Journal */
 .log{list-style:none;margin:0;padding:6px 0}
-.log li{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;padding:7px 16px;font-size:13px}
+.log li{display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px;padding:7px 16px;font-size:13px}
 .log li span:first-child{font-family:var(--f-mono);color:var(--muted);font-size:12px;padding-top:1px}
 .log li.erreur span:last-child,.log li.urgent span:last-child{color:var(--crit)}
 .log li b{font-weight:600}
 
+/* Panneau de détail */
 .scrim{position:fixed;inset:0;background:rgba(10,14,24,.45);display:flex;justify-content:flex-end;z-index:20}
-.drawer{background:var(--panel);width:min(600px,100%);height:100%;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:16px;border-left:1px solid var(--line)}
+.drawer{background:var(--panel);width:min(620px,100%);height:100%;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:16px;border-left:1px solid var(--line)}
 .drawer h2{font-size:20px}
+.drawer h4{margin:4px 0 0;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .drawer p{margin:0;max-width:64ch;white-space:pre-wrap}
-.drawer h4{margin:6px 0 0;font-size:13px}
 .kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 14px;font-size:13px;margin:0}
 .kv dt{color:var(--muted)} .kv dd{margin:0;overflow-wrap:anywhere}
 .files{font-family:var(--f-mono);font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow-x:auto;white-space:pre;margin:0}
@@ -101,6 +148,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .liste > div{border-left:3px solid var(--line);padding-left:10px}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;padding-top:12px;border-top:1px solid var(--line)}
 .close{align-self:flex-end;border:0;background:none;color:var(--muted);font-size:13px;padding:4px}
+.note-intro{background:var(--run-bg);color:var(--ink);border-radius:10px;padding:14px 16px;font-size:13.5px}
+.note-intro b{color:var(--run)}
 
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:500;z-index:30;max-width:calc(100% - 32px)}
 </style>
@@ -108,236 +157,364 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand">
-      <h1>Zylot</h1>
-      <span class="lien" id="lien">connexion…</span>
-    </div>
-    <div class="row">
-      <button class="btn primary" type="button" id="toutAuditer">Auditer tous les projets</button>
-    </div>
+    <div class="brand"><h1>Zylot</h1><span class="lien" id="lien">connexion…</span></div>
   </header>
 
-  <section class="gauges" aria-label="État général">
-    <div class="gauge">
-      <span class="label">À décider</span>
-      <span class="val mono" id="gAlertes">–</span>
-      <span class="sub" id="gAlertesSub"></span>
-    </div>
-    <div class="gauge">
-      <span class="label">Projets vus</span>
-      <span class="val mono" id="gVus">–</span>
-      <div class="bar"><i id="gVusBar" style="width:0"></i></div>
-      <span class="sub">audités ces 7 derniers jours</span>
-    </div>
-    <div class="gauge">
-      <span class="label">Audit</span>
-      <span class="val" id="gAudit" style="font-size:20px">–</span>
-      <div class="bar" id="gAuditBarWrap" hidden><i id="gAuditBar" style="width:0"></i></div>
-      <span class="sub" id="gAuditSub"></span>
-    </div>
-    <div class="gauge">
-      <span class="label">Prochain audit</span>
-      <span class="val" id="gProchain" style="font-size:20px">–</span>
-      <span class="sub">chaque lundi à 1 h, en lecture seule</span>
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-onglet="vue" aria-selected="true">Vue d'ensemble <span class="count" id="cRegarder"></span></button>
+    <button class="tab" role="tab" data-onglet="surveillance" aria-selected="false">Surveillance <span class="count" id="cSites"></span></button>
+    <button class="tab" role="tab" data-onglet="securite" aria-selected="false">Sécurité <span class="count" id="cSecu"></span></button>
+    <button class="tab" role="tab" data-onglet="propositions" aria-selected="false">Propositions <span class="count" id="cProp"></span></button>
+  </nav>
+
+  <!-- VUE D'ENSEMBLE -->
+  <section id="o-vue" class="col">
+    <p class="synthese" id="synthese">Chargement…</p>
+    <div class="gauges" id="gaugesVue"></div>
+    <div class="main">
+      <div class="col">
+        <section class="panel">
+          <div class="panel-h"><h2>Projets</h2><span class="muted" style="font-size:12.5px">cliquez sur une ligne pour le détail</span></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Projet</th><th>Site</th><th>Certificat</th><th>Code</th><th>Sécurité</th><th>Liens</th></tr></thead>
+            <tbody id="tProjets"></tbody>
+          </table></div>
+        </section>
+      </div>
+      <div class="col">
+        <section class="panel">
+          <div class="panel-h"><h2>À regarder</h2><span class="count" id="nRegarder">0</span></div>
+          <div id="regarder"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-h"><h2>Journal</h2></div>
+          <ul class="log" id="log"></ul>
+        </section>
+      </div>
     </div>
   </section>
 
-  <div class="main">
-    <div class="col">
-      <section class="panel" aria-labelledby="inboxTitle">
-        <div class="panel-h"><h2 id="inboxTitle">À décider</h2><span class="count" id="inboxCount">0</span></div>
-        <div id="inbox"><p class="empty">Chargement…</p></div>
-      </section>
-      <section class="panel" aria-labelledby="logTitle">
-        <div class="panel-h"><h2 id="logTitle">Journal</h2></div>
-        <ul class="log" id="log"></ul>
-      </section>
+  <!-- SURVEILLANCE -->
+  <section id="o-surveillance" class="col" hidden>
+    <div class="row" style="justify-content:space-between">
+      <p class="synthese" id="syntheseSurv"></p>
+      <button class="btn" type="button" id="btnSurv">Vérifier maintenant</button>
     </div>
-    <div class="col">
-      <section class="panel" aria-labelledby="projTitle">
-        <div class="panel-h"><h2 id="projTitle">Projets</h2><span class="count" id="projCount"></span></div>
-        <div class="projects" id="projects"></div>
-      </section>
+    <p class="muted" style="margin:0">Chaque site est testé toutes les 5 minutes, sans Claude. Une panne est signalée au deuxième échec de suite, sur le Mac et le téléphone.</p>
+    <div class="cards" id="cartesSurv"></div>
+  </section>
+
+  <!-- SÉCURITÉ -->
+  <section id="o-securite" class="col" hidden>
+    <div class="row" style="justify-content:space-between">
+      <p class="synthese" id="syntheseSecu"></p>
+      <button class="btn" type="button" id="btnSecu">Relancer les contrôles</button>
     </div>
-  </div>
+    <p class="muted" style="margin:0">Chaque jour, Zylot teste vos sites de l'extérieur, sans Claude : fichiers sensibles accessibles à tous, HTTPS, en-têtes de protection. Le lundi, Claude lit aussi le code. La note part de 100 et perd des points pour chaque faiblesse.</p>
+    <div class="cards" id="cartesSecu"></div>
+  </section>
+
+  <!-- PROPOSITIONS -->
+  <section id="o-propositions" class="col" hidden>
+    <div class="note-intro"><b>Bientôt : votre développeur.</b> Chaque lundi, Claude relira vos projets et vous écrira une lettre : ce qu'il a vu, et les trois choses qu'il ferait en priorité. Chaque proposition aura ses boutons « On le fait », « Plus tard », « Non ». En attendant, voici ce que Zylot remarque déjà tout seul.</div>
+    <div class="cards" id="cartesProp"></div>
+  </section>
 </div>
 
-<div class="scrim" id="scrim" hidden>
-  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle"></aside>
-</div>
+<div class="scrim" id="scrim" hidden><aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle"></aside></div>
 <div class="toast" id="toast" hidden></div>
 
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const GRAVITE = {urgent:'Urgent', securite:'Sécurité', info:'Info'};
-const ETAT = {ok:'Au calme', attention:'À regarder', urgent:'Urgent', erreur:'Audit en échec', jamais:'Jamais audité', run:'Audit en cours'};
-let donnees = null, toastTimer;
+const GRAV = {urgent:'Urgent', securite:'Sécurité', info:'Info'};
+let D = null, onglet = 'vue', toastTimer;
+try{ onglet = localStorage.getItem('zylot-onglet') || 'vue'; }catch{}
 
-function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.hidden=true,3000); }
-
+function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.hidden=true,3000); }
 function quand(iso){
-  if(!iso) return '';
-  const d = new Date(iso), maintenant = new Date();
-  const h = d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-  if(d.toDateString() === maintenant.toDateString()) return h;
-  const hier = new Date(maintenant); hier.setDate(hier.getDate()-1);
-  if(d.toDateString() === hier.toDateString()) return 'hier ' + h;
-  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}) + ' ' + h;
+  if(!iso) return '—';
+  const d=new Date(iso), n=new Date();
+  const h=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  if(d.toDateString()===n.toDateString()) return h;
+  const hier=new Date(n); hier.setDate(hier.getDate()-1);
+  if(d.toDateString()===hier.toDateString()) return 'hier '+h;
+  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' '+h;
 }
-
+function age(iso){
+  if(!iso) return '—';
+  const j=Math.floor((Date.now()-new Date(iso))/864e5);
+  if(j<1){ const h=Math.floor((Date.now()-new Date(iso))/36e5); return h<1?'à l\'instant':`il y a ${h} h`; }
+  if(j===1) return 'hier'; if(j<31) return `il y a ${j} j`;
+  return `il y a ${Math.floor(j/30)} mois`;
+}
+const pl = (n, s, p) => n + ' ' + (n>1 ? (p||s+'s') : s);
 async function api(chemin, corps){
-  const r = await fetch(chemin, corps === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-Zylot':'1'}, body:JSON.stringify(corps)});
+  const r = await fetch(chemin, corps===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Zylot':'1'},body:JSON.stringify(corps)});
   const j = await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(j.erreur || 'Erreur ' + r.status);
+  if(!r.ok) throw new Error(j.erreur||'Erreur '+r.status);
   return j;
 }
 
-async function charger(){
-  try{
-    donnees = await api('/api/etat');
-    $('#lien').textContent = 'à jour à ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    $('#lien').classList.remove('off');
-    rendre();
-  }catch(e){
-    $('#lien').textContent = 'serveur injoignable — lancez « node serveur.js »';
-    $('#lien').classList.add('off');
-  }
+// ---------- Ce qu'il faut regarder, calculé à partir de tout ce que Zylot sait ----------
+function aRegarder(p){
+  const l = [];
+  const e = p.surveillance?.etat;
+  if(e && e.enPanne) l.push({g:'urgent', t:'Le site ne répond plus', d:`${p.site} : ${e.erreur||'code '+e.code} depuis ${quand(p.surveillance.pannes[0]?.debut)}.`});
+  else if(e && !e.ok) l.push({g:'securite', t:'Le site a raté un test', d:`${e.erreur||'code '+e.code}. Si ça se répète au prochain test, ce sera une panne.`});
+  if(e?.cert && e.cert.jours < 30) l.push({g: e.cert.jours<14?'urgent':'securite', t:`Certificat : plus que ${pl(e.cert.jours,'jour')}`, d:`Il expire le ${new Date(e.cert.expire).toLocaleDateString('fr-FR')}. Normalement l'hébergeur le renouvelle seul : à vérifier s'il reste moins de 14 jours.`});
+  for(const pt of (p.securite?.points||[])) if(pt.gravite!=='info') l.push({g:pt.gravite, t:pt.titre, d:pt.detail});
+  const dep = p.depot;
+  if(dep?.git){
+    if(!dep.dernierCommit) l.push({g:'securite', t:'Aucun commit dans le dépôt', d:`Le dossier a un dépôt git, mais rien n'y a jamais été enregistré${dep.nonCommites?` (${pl(dep.nonCommites,'fichier')} en attente)`:''}. Le code n'est sauvegardé nulle part ailleurs que sur ce Mac.`});
+    else if(dep.nonPousses>0) l.push({g:'info', t:`${pl(dep.nonPousses,'commit')} pas sur GitHub`, d:`Ce travail n'existe que sur ce Mac. Un git push le met à l'abri.`});
+    if(dep.dernierCommit && dep.nonCommites>0) l.push({g:'info', t:`${pl(dep.nonCommites,'fichier modifié')} non commité${dep.nonCommites>1?'s':''}`, d:'Des modifications en cours, pas encore enregistrées dans git.'});
+  } else if(p.depot && !p.depot.git) l.push({g:'info', t:'Pas de dépôt git', d:'Aucun historique ni sauvegarde du code.'});
+  for(const a of D.alertes.filter(a=>a.projet===p.id)) l.push({g:a.gravite, t:a.titre, d:a.detail, alerte:a.id});
+  return l;
+}
+function voyant(p){
+  const l = aRegarder(p);
+  if(l.some(x=>x.g==='urgent')) return 'rouge';
+  if(l.some(x=>x.g==='securite') || ['C','D','E'].includes(p.notation?.lettre)) return 'orange';
+  if(!p.site && !p.depot?.git) return 'gris';
+  return 'vert';
 }
 
-function etatProjet(p){
-  if(donnees.enCours && donnees.enCours.projet === p.id) return 'run';
-  if(!p.dernier) return 'jamais';
-  if(p.dernier.erreur) return 'erreur';
-  return p.dernier.etat || 'ok';
-}
-
+// ---------- Rendu ----------
 function rendre(){
-  const {projets, alertes, journal, enCours} = donnees;
-  const nom = id => projets.find(p=>p.id===id)?.nom || id;
-
-  // Bandeau
-  $('#gAlertes').textContent = alertes.length;
-  const nUrg = alertes.filter(a=>a.gravite==='urgent').length, nSec = alertes.filter(a=>a.gravite==='securite').length;
-  $('#gAlertesSub').textContent = alertes.length ? `${nUrg} urgent · ${nSec} sécurité · ${alertes.length-nUrg-nSec} info` : 'rien en attente';
-  const vus = projets.filter(p=>p.dernier && !p.dernier.erreur && Date.now()-new Date(p.dernier.quand) < 7*864e5).length;
-  $('#gVus').textContent = `${vus} / ${projets.length}`;
-  $('#gVusBar').style.width = (projets.length ? vus/projets.length*100 : 0) + '%';
-  if(enCours){
-    $('#gAudit').textContent = 'En cours : ' + nom(enCours.projet);
-    $('#gAuditSub').textContent = `projet ${enCours.rang} sur ${enCours.total} · depuis ${quand(enCours.debut)}`;
-    $('#gAuditBarWrap').hidden = false;
-    $('#gAuditBar').style.width = ((enCours.rang-1)/enCours.total*100) + '%';
-  }else{
-    const derniers = projets.map(p=>p.dernier?.quand).filter(Boolean).sort();
-    $('#gAudit').textContent = derniers.length ? 'Au repos' : 'Jamais lancé';
-    $('#gAuditSub').textContent = derniers.length ? 'dernier rapport : ' + quand(derniers.at(-1)) : 'lancez un premier audit';
-    $('#gAuditBarWrap').hidden = true;
-  }
-  $('#toutAuditer').disabled = !!enCours;
-  // Prochain lundi 1 h (aujourd'hui si on est lundi avant 1 h)
-  const pr = new Date(); pr.setHours(1,0,0,0);
-  pr.setDate(pr.getDate() + ((8 - pr.getDay()) % 7));
-  if(pr <= new Date()) pr.setDate(pr.getDate() + 7);
-  $('#gProchain').textContent = pr.toLocaleDateString('fr-FR',{weekday:'long', day:'numeric', month:'long'});
-
-  // À décider
-  $('#inboxCount').textContent = alertes.length;
+  const P = D.projets;
+  const sites = P.filter(p=>p.site);
+  const enLigne = sites.filter(p=>p.surveillance?.etat?.ok).length;
+  const tous = P.flatMap(p=>aRegarder(p).map(x=>({...x, p})));
   const ordre = {urgent:0, securite:1, info:2};
-  $('#inbox').innerHTML = alertes.length ? [...alertes].sort((a,b)=>ordre[a.gravite]-ordre[b.gravite] || b.quand.localeCompare(a.quand)).map(a=>`
-    <button type="button" class="item g-${esc(a.gravite)}" data-alerte="${esc(a.id)}">
-      <span class="stripe"></span>
-      <span><span class="t">${esc(a.titre)}</span>
-        <span class="meta"><span class="pill p-${esc(a.gravite)}">${GRAVITE[a.gravite]||esc(a.gravite)}</span><span>${esc(nom(a.projet))}</span></span></span>
-      <time>${quand(a.quand)}</time>
-    </button>`).join('') : '<p class="empty">Rien à décider. Tout est au calme.</p>';
+  tous.sort((a,b)=>ordre[a.g]-ordre[b.g]);
+  const importants = tous.filter(x=>x.g!=='info');
+  const rouges = P.filter(p=>voyant(p)==='rouge').length;
 
-  // Projets
-  $('#projCount').textContent = projets.length;
-  $('#projects').innerHTML = projets.map(p=>{
-    const e = etatProjet(p);
-    const texte = e==='run' ? 'L\'agent lit le code…' : e==='jamais' ? (p.note || 'Pas encore audité.') : p.dernier.erreur ? p.dernier.erreur : p.dernier.resume;
-    return `<article class="proj">
-      <div class="proj-h"><h3>${esc(p.nom)}</h3><span class="pill p-${e}">${ETAT[e]}</span></div>
-      <div class="site">${p.site ? esc(p.site.replace(/^https?:\/\//,'')) : 'pas de site audité'}${p.dossierExiste ? '' : ' · <span style="color:var(--crit)">dossier introuvable</span>'}</div>
-      <div class="task">${esc(String(texte).slice(0,220))}</div>
-      <div class="facts">
-        <span>${p.dernier ? 'Audit ' + quand(p.dernier.quand) : '—'}</span>
-        <span class="row" style="gap:6px">
-          ${p.dernier && !p.dernier.erreur ? `<button type="button" class="btn small" data-rapport="${esc(p.id)}">Rapport</button>` : ''}
-          <button type="button" class="btn small" data-auditer="${esc(p.id)}" ${enCours?'disabled':''}>Auditer</button>
-        </span>
+  // Onglets : compteurs
+  $('#cRegarder').textContent = importants.length || '';
+  $('#cSites').textContent = sites.length ? `${enLigne}/${sites.length}` : '';
+  const notes = P.filter(p=>p.notation);
+  $('#cSecu').textContent = notes.length ? notes.map(p=>p.notation.lettre).sort().at(-1) : '';
+
+  // Synthèse
+  $('#synthese').innerHTML = `${pl(P.length,'projet')} · ` +
+    (sites.length ? (enLigne===sites.length ? `<b class="t-vert">les ${sites.length} sites sont en ligne</b>` : `<b class="t-rouge">${sites.length-enLigne} site${sites.length-enLigne>1?'s':''} sur ${sites.length} en difficulté</b>`) : '') +
+    ` · ${importants.length ? `<b class="${rouges?'t-rouge':'t-orange'}">${pl(importants.length,'chose')} à regarder</b>` : 'rien d\'important à signaler'}.`;
+
+  const certs = sites.map(p=>p.surveillance?.etat?.cert).filter(Boolean);
+  const minCert = certs.length ? Math.min(...certs.map(c=>c.jours)) : null;
+  const moyMs = sites.map(p=>p.surveillance?.etat?.ms).filter(Boolean);
+  const nonPousses = P.filter(p=>p.depot?.nonPousses>0 || (p.depot?.git && !p.depot.dernierCommit)).length;
+  $('#gaugesVue').innerHTML = `
+    <div class="gauge"><span class="label">Sites en ligne</span><span class="val mono ${enLigne<sites.length?'t-rouge':''}">${enLigne} / ${sites.length}</span><span class="sub">${moyMs.length?'réponse moyenne '+Math.round(moyMs.reduce((a,b)=>a+b,0)/moyMs.length)+' ms':'en attente du premier test'}</span></div>
+    <div class="gauge"><span class="label">Certificats</span><span class="val mono ${minCert!=null&&minCert<30?'t-orange':''}">${minCert==null?'–':minCert+' j'}</span><span class="sub">le plus proche de l'expiration</span></div>
+    <div class="gauge"><span class="label">Sécurité</span><span class="val mono">${notes.length?notes.map(p=>p.notation.lettre).sort().join(' '):'–'}</span><span class="sub">notes des sites, de A à E</span></div>
+    <div class="gauge"><span class="label">Code à mettre à l'abri</span><span class="val mono ${nonPousses?'t-orange':''}">${nonPousses}</span><span class="sub">projet${nonPousses>1?'s':''} avec du travail absent de GitHub</span></div>`;
+
+  // Tableau des projets
+  $('#tProjets').innerHTML = P.map(p=>{
+    const e = p.surveillance?.etat, dep = p.depot, n = p.notation;
+    const site = !p.site ? `<span class="muted">pas de site suivi</span>` :
+      !e ? `<span class="muted">premier test…</span>` :
+      `<span class="${e.ok?'t-vert':'t-rouge'}">${e.ok?'en ligne':'hors ligne'}</span>${e.ok?` <span class="mono muted">${e.ms} ms</span>`:''}<div class="s">${esc(p.site.replace(/^https?:\/\//,''))}</div>`;
+    const cert = !e?.cert ? '<span class="muted">—</span>' : `<span class="mono ${e.cert.jours<14?'t-rouge':e.cert.jours<30?'t-orange':''}">${e.cert.jours} j</span><div class="s">${new Date(e.cert.expire).toLocaleDateString('fr-FR')}</div>`;
+    const code = !dep ? '—' : !dep.git ? '<span class="muted">pas de git</span>' : !dep.dernierCommit ? '<span class="t-orange">aucun commit</span>' :
+      `${age(dep.dernierCommit.quand)}<div class="s">${dep.nonPousses>0?`<span class="t-orange">${dep.nonPousses} non poussé${dep.nonPousses>1?'s':''}</span>`:dep.nonPousses===0?'à jour sur GitHub':'pas de suivi distant'}${dep.nonCommites?` · ${dep.nonCommites} en cours`:''}</div>`;
+    const secu = n ? `<span class="grade g-${n.lettre}">${n.lettre}</span>` : `<span class="grade g-x" title="Pas de site à contrôler">–</span>`;
+    const liens = [p.site&&`<a href="${esc(p.site)}" target="_blank" rel="noopener">Site</a>`, p.admin&&`<a href="${esc(p.admin)}" target="_blank" rel="noopener">Admin</a>`, dep?.github&&`<a href="${esc(dep.github)}" target="_blank" rel="noopener">GitHub</a>`].filter(Boolean).join('') || '<span class="muted">—</span>';
+    return `<tr data-projet="${esc(p.id)}"><td><div class="nom"><span class="dot d-${voyant(p)}"></span>${esc(p.nom)}</div></td><td>${site}</td><td>${cert}</td><td>${code}</td><td>${secu}</td><td><div class="liens">${liens}</div></td></tr>`;
+  }).join('');
+
+  // À regarder
+  $('#nRegarder').textContent = tous.length;
+  $('#regarder').innerHTML = tous.length ? tous.slice(0,14).map((x,i)=>`
+    <button type="button" class="item" data-projet="${esc(x.p.id)}">
+      <span class="stripe s-${x.g}"></span>
+      <span><span class="t">${esc(x.t)}</span><span class="meta"><span class="pill p-${x.g}">${GRAV[x.g]}</span><span>${esc(x.p.nom)}</span></span></span>
+    </button>`).join('') + (tous.length>14?`<p class="empty" style="padding:10px">et ${tous.length-14} autres, dans le détail de chaque projet</p>`:'')
+    : '<p class="empty">Rien à signaler. Tout tourne.</p>';
+
+  $('#log').innerHTML = D.journal.length ? D.journal.slice(0,25).map(l=>`<li class="${esc(l.niveau)}"><span>${quand(l.quand)}</span><span><b>${esc(l.projet)}</b> · ${esc(l.message)}</span></li>`).join('') : '<li><span></span><span class="muted">Rien pour l\'instant.</span></li>';
+
+  rendreSurveillance(sites);
+  rendreSecurite(P);
+  rendrePropositions(P);
+}
+
+function rendreSurveillance(sites){
+  const enLigne = sites.filter(p=>p.surveillance?.etat?.ok).length;
+  $('#syntheseSurv').innerHTML = `<b>${enLigne} site${enLigne>1?'s':''} sur ${sites.length}</b> en ligne`;
+  $('#cartesSurv').innerHTML = sites.map(p=>{
+    const s = p.surveillance || {}, e = s.etat;
+    const max = Math.max(1, ...(s.heures||[]).filter(Boolean).map(h=>h.ms||0));
+    const barres = (s.heures||[]).map(h=>!h?'<i class="vide"></i>':h.panne&&!h.ms?'<i class="panne" style="height:100%"></i>':`<i class="${h.panne?'panne':''}" style="height:${Math.max(6,(h.ms||0)/max*100)}%" title="${h.ms} ms"></i>`).join('');
+    const d = v => v==null?'–':v.toString().replace('.',',')+' %';
+    return `<article class="card">
+      <div class="card-h"><div><h3>${esc(p.nom)}</h3><div class="url">${esc(p.site)}</div></div>
+        ${!e?'<span class="pill p-gris">en attente</span>':e.enPanne?'<span class="pill p-rouge">en panne</span>':e.ok?'<span class="pill p-vert">en ligne</span>':'<span class="pill p-orange">un échec</span>'}</div>
+      ${e&&!e.ok?`<p class="t-rouge" style="margin:0;font-size:13px">${esc(e.erreur||'code '+e.code)}</p>`:''}
+      <div class="chiffres"><div><b>${d(s.dispo24)}</b><span>24 h</span></div><div><b>${d(s.dispo7)}</b><span>7 jours</span></div><div><b>${d(s.dispo30)}</b><span>30 jours</span></div></div>
+      <div><div class="label" style="margin-bottom:4px">Temps de réponse, 24 h</div><div class="barres">${barres}</div><div class="axe"><span>-24 h</span><span>${e?.ms!=null?'dernier : '+e.ms+' ms':''}</span><span>maintenant</span></div></div>
+      <dl class="kv">
+        <dt>Certificat</dt><dd>${e?.cert?`<span class="${e.cert.jours<30?'t-orange':''}">${e.cert.jours} jours</span> · jusqu'au ${new Date(e.cert.expire).toLocaleDateString('fr-FR')}${e.cert.emetteur?' · '+esc(e.cert.emetteur):''}`:'<span class="t-rouge">illisible</span>'}</dd>
+        <dt>Dernier test</dt><dd>${quand(e?.quand)}</dd>
+        <dt>Pannes</dt><dd>${s.pannes?.length?s.pannes.map(x=>`${quand(x.debut)} · ${esc(x.erreur)}`).join('<br>'):'aucune enregistrée'}</dd>
+      </dl>
+    </article>`;
+  }).join('') || '<p class="empty">Aucun site à surveiller.</p>';
+}
+
+function rendreSecurite(P){
+  const notes = P.filter(p=>p.notation);
+  const exposes = P.reduce((n,p)=>n+(p.securite?.exposes?.length||0),0);
+  const dernier = P.map(p=>p.securite?.quand).filter(Boolean).sort().at(-1);
+  $('#syntheseSecu').innerHTML = !notes.length ? 'Premiers contrôles en cours…' :
+    `${exposes ? `<b class="t-rouge">${pl(exposes,'fichier sensible exposé')}</b>` : '<b class="t-vert">Aucun fichier sensible exposé</b>'} · contrôlé ${quand(dernier)}`;
+  $('#btnSecu').disabled = !!D.securiteEnCours;
+  $('#btnSecu').textContent = D.securiteEnCours ? 'Contrôles en cours…' : 'Relancer les contrôles';
+  $('#cartesSecu').innerHTML = P.map(p=>{
+    const c = p.securite, n = p.notation, r = p.dernier;
+    const alertes = D.alertes.filter(a=>a.projet===p.id);
+    const ligne = (ok, texte) => `<li><span class="k ${ok?'t-vert':'t-rouge'}">${ok?'✓':'✗'}</span><span>${texte}</span></li>`;
+    let checks = '';
+    if(!p.site) checks = `<p class="muted" style="margin:0;font-size:13px">Pas de site en ligne à tester${p.note?' : '+esc(p.note):''}.</p>`;
+    else if(!c) checks = '<p class="muted" style="margin:0;font-size:13px">Premier contrôle en attente.</p>';
+    else if(!c.entetes) checks = `<ul class="checks">${ligne(false, esc(c.points[0]?.detail||'Site injoignable'))}</ul>`;
+    else checks = `<ul class="checks">
+        ${ligne(!c.exposes.length, c.exposes.length ? 'Fichiers exposés : '+c.exposes.map(esc).join(', ') : `Aucun fichier sensible exposé (${c.fichiersTestes} testés)`)}
+        ${ligne(c.redirigeHttps, c.redirigeHttps ? 'http:// renvoie vers https://' : 'http:// ne renvoie pas vers https://')}
+        ${Object.entries(c.entetes).map(([k,v])=>ligne(v, esc(k))).join('')}
+        ${c.points.filter(x=>x.titre.startsWith('Le serveur affiche')).map(x=>ligne(false, esc(x.detail))).join('')}
+      </ul>`;
+    return `<article class="card">
+      <div class="card-h"><div style="min-width:0"><h3>${esc(p.nom)}</h3><div class="url">${n?`${n.score} / 100`:'pas de note'}</div></div>
+        <span class="grosse g-${n?n.lettre:'x'}">${n?n.lettre:'–'}</span></div>
+      <div><div class="label" style="margin-bottom:6px">Contrôles automatiques</div>${checks}</div>
+      <div><div class="label" style="margin-bottom:6px">Lecture du code par Claude</div>
+        <p style="margin:0;font-size:13px" class="${r?'':'muted'}">${r ? (r.erreur ? '<span class="t-rouge">Dernier audit en échec</span>' : `Audit ${quand(r.quand)} · ${pl(r.nbAlertes,'point')} relevé${r.nbAlertes>1?'s':''}`) : 'Pas encore audité. Prochain audit lundi à 1 h.'}</p>
+        ${alertes.map(a=>`<button type="button" class="item" data-alerte="${esc(a.id)}" style="padding-left:0"><span class="stripe s-${esc(a.gravite)}"></span><span><span class="t">${esc(a.titre)}</span></span></button>`).join('')}
+      </div>
+      <div class="row" style="margin-top:auto">
+        <button type="button" class="btn small" data-auditer="${esc(p.id)}" ${D.enCours?'disabled':''}>${D.enCours?.projet===p.id?'Audit en cours…':'Faire lire le code par Claude'}</button>
+        ${r && !r.erreur ? `<button type="button" class="btn small" data-rapport="${esc(p.id)}">Rapport</button>`:''}
       </div>
     </article>`;
   }).join('');
-
-  // Journal
-  $('#log').innerHTML = journal.length ? journal.map(l=>`<li class="${esc(l.niveau)}"><span>${quand(l.quand)}</span><span><b>${esc(l.projet)}</b> · ${esc(l.message)}</span></li>`).join('') : '<li><span></span><span style="color:var(--muted)">Rien pour l\'instant.</span></li>';
 }
 
-// --- Panneau de détail ---
-function ouvrir(html){ $('#drawer').innerHTML = '<button type="button" class="close" data-fermer>Fermer ✕</button>' + html; $('#scrim').hidden=false; $('#drawer .close').focus(); }
-function fermer(){ $('#scrim').hidden = true; }
+function rendrePropositions(P){
+  const cartes = [];
+  for(const p of P){
+    const idees = [];
+    const dep = p.depot;
+    if(dep?.dernierCommit){
+      const j = (Date.now()-new Date(dep.dernierCommit.quand))/864e5;
+      if(j > 60) idees.push({t:'Projet endormi', d:`Pas de commit depuis ${age(dep.dernierCommit.quand).replace('il y a ','')}. Toujours en service ? Si oui, un audit de sécurité et une mise à jour des dépendances s'imposent.`});
+    }
+    if(dep?.git && !dep.dernierCommit) idees.push({t:'Faire un premier commit et le pousser sur GitHub', d:'Aujourd\'hui le code n\'existe que sur ce Mac et sur le serveur. Une sauvegarde sur GitHub coûte deux minutes.'});
+    if(dep?.nonPousses>5) idees.push({t:'Pousser le travail sur GitHub', d:`${dep.nonPousses} commits n'existent que sur ce Mac.`});
+    const c = p.securite;
+    if(c?.entetes && Object.values(c.entetes).some(v=>!v)) idees.push({t:'Ajouter les en-têtes de protection', d:`Manquants : ${Object.entries(c.entetes).filter(([,v])=>!v).map(([k])=>k).join(', ')}. Quelques lignes dans le .htaccess, sans effet visible pour les visiteurs.`});
+    if(c && c.redirigeHttps===false) idees.push({t:'Forcer le HTTPS', d:'Rediriger http:// vers https:// dans le .htaccess, pour que personne ne navigue en clair.'});
+    for(const x of (p.dernier?.propositions||[])) idees.push({t:x.titre, d:x.detail, claude:true});
+    if(idees.length) cartes.push(`<article class="card"><div class="card-h"><h3>${esc(p.nom)}</h3><span class="count">${idees.length}</span></div>
+      <div class="liste">${idees.map(x=>`<div><b>${esc(x.t)}</b>${x.claude?' <span class="pill p-bleu">Claude</span>':''}<br><span style="font-size:13px">${esc(x.d)}</span></div>`).join('')}</div></article>`);
+  }
+  $('#cProp').textContent = cartes.length || '';
+  $('#cartesProp').innerHTML = cartes.join('') || '<p class="empty">Rien à proposer pour l\'instant.</p>';
+}
 
-function ouvrirAlerte(id){
-  const a = donnees.alertes.find(x=>x.id===id); if(!a) return;
-  const p = donnees.projets.find(x=>x.id===a.projet);
+// ---------- Détail d'un projet ----------
+function ouvrir(html){ $('#drawer').innerHTML='<button type="button" class="close" data-fermer>Fermer ✕</button>'+html; $('#scrim').hidden=false; $('#drawer .close').focus(); }
+function fermer(){ $('#scrim').hidden=true; }
+
+function ouvrirProjet(id){
+  const p = D.projets.find(x=>x.id===id); if(!p) return;
+  const l = aRegarder(p), e = p.surveillance?.etat, dep = p.depot;
   ouvrir(`
-    <div class="row"><span class="pill p-${esc(a.gravite)}">${GRAVITE[a.gravite]||''}</span><span class="label">${esc(p?.nom||a.projet)} · ${quand(a.quand)}${a.revue ? ' · revue ' + quand(a.revue) : ''}</span></div>
-    <h2 id="dTitle">${esc(a.titre)}</h2>
-    <p>${esc(a.detail)}</p>
-    ${a.fichiers?.length ? `<div><div class="label" style="margin-bottom:6px">Où regarder</div><pre class="files">${a.fichiers.map(esc).join('\n')}</pre></div>` : ''}
+    <div class="row"><span class="dot d-${voyant(p)}"></span><span class="label">${p.notation?'sécurité '+p.notation.lettre+' · ':''}${p.site?esc(p.site):'pas de site suivi'}</span></div>
+    <h2 id="dTitle">${esc(p.nom)}</h2>
+    ${l.length ? `<h4>À regarder</h4><div class="liste">${l.map(x=>`<div style="border-left-color:var(--${x.g==='urgent'?'crit':x.g==='securite'?'warn':'line'})"><b>${esc(x.t)}</b> <span class="pill p-${x.g}">${GRAV[x.g]}</span><br><span style="font-size:13px">${esc(x.d)}</span>${x.alerte?`<br><button type="button" class="btn small" data-vu="${esc(x.alerte)}" style="margin-top:6px">Vu, je m'en occupe</button>`:''}</div>`).join('')}</div>` : '<p class="t-vert">Rien à signaler sur ce projet.</p>'}
+    <h4>Site</h4>
+    <dl class="kv">${p.site ? `
+      <dt>État</dt><dd>${e?(e.ok?`en ligne · ${e.ms} ms`:`<span class="t-rouge">${esc(e.erreur||'code '+e.code)}</span>`):'premier test en attente'}</dd>
+      <dt>Disponibilité</dt><dd>${p.surveillance?.dispo7!=null?String(p.surveillance.dispo7).replace('.',',')+' % sur 7 jours':'–'}</dd>
+      <dt>Certificat</dt><dd>${e?.cert?`${e.cert.jours} jours (${new Date(e.cert.expire).toLocaleDateString('fr-FR')})`:'–'}</dd>` : `<dt>Site</dt><dd>${esc(p.note||'aucun site suivi')}</dd>`}
+    </dl>
+    <h4>Code</h4>
+    <dl class="kv">${dep?.git ? `
+      <dt>Dernier commit</dt><dd>${dep.dernierCommit?`${age(dep.dernierCommit.quand)} · ${esc(dep.dernierCommit.message)}`:'<span class="t-orange">aucun</span>'}</dd>
+      <dt>Branche</dt><dd>${esc(dep.branche||'–')}</dd>
+      <dt>En cours</dt><dd>${pl(dep.nonCommites,'fichier modifié','fichiers modifiés')}</dd>
+      <dt>GitHub</dt><dd>${dep.github?`<a href="${esc(dep.github)}" target="_blank" rel="noopener">${esc(dep.github.replace('https://github.com/',''))}</a>`:'pas relié'}${dep.nonPousses>0?` · <span class="t-orange">${dep.nonPousses} commit${dep.nonPousses>1?'s':''} à pousser</span>`:dep.nonPousses===0?' · à jour':''}</dd>` : '<dt>Git</dt><dd>pas de dépôt</dd>'}
+    </dl>
+    ${p.dernier && !p.dernier.erreur ? `<h4>Dernier audit Claude · ${quand(p.dernier.quand)}</h4><p>${esc(p.dernier.resume)}</p>` : ''}
     <div class="actions">
-      <button type="button" class="btn primary" data-vu="${esc(a.id)}">Vu, je m'en occupe</button>
-      <button type="button" class="btn" data-rapport="${esc(a.projet)}">Rapport complet</button>
+      ${p.site?`<a class="btn" href="${esc(p.site)}" target="_blank" rel="noopener" style="text-decoration:none">Ouvrir le site</a>`:''}
+      <button type="button" class="btn" data-auditer="${esc(p.id)}" ${D.enCours?'disabled':''}>Faire lire le code par Claude</button>
     </div>`);
 }
 
-function ouvrirRapport(id){
-  const p = donnees.projets.find(x=>x.id===id); const r = p?.dernier; if(!r) return;
-  const s = r.site;
+function ouvrirAlerte(id){
+  const a = D.alertes.find(x=>x.id===id); if(!a) return;
+  const p = D.projets.find(x=>x.id===a.projet);
   ouvrir(`
-    <div class="row"><span class="pill p-${esc(r.etat||'ok')}">${ETAT[r.etat]||''}</span><span class="label">audit ${quand(r.quand)} · ${Math.max(1,Math.round((r.duree||0)/60))} min</span></div>
-    <h2 id="dTitle">${esc(p.nom)}</h2>
-    <p>${esc(r.resume)}</p>
-    <dl class="kv">
-      <dt>Site</dt><dd>${s?.verifie ? (s.repond ? 'répond' : '<span style="color:var(--crit)">ne répond pas</span>') + (s.certificat_expire_le ? ' · certificat jusqu\'au ' + esc(s.certificat_expire_le) : '') : 'non vérifié'}</dd>
-      ${s?.detail ? `<dt></dt><dd>${esc(s.detail)}</dd>` : ''}
-      <dt>Points relevés</dt><dd>${r.nbAlertes}</dd>
-    </dl>
-    ${r.propositions?.length ? `<h4>Propositions</h4><div class="liste">${r.propositions.map(x=>`<div><b>${esc(x.titre)}</b><br>${esc(x.detail)}</div>`).join('')}</div>` : ''}
-    <div class="actions"><button type="button" class="btn" data-fermer>Fermer</button></div>`);
+    <div class="row"><span class="pill p-${esc(a.gravite)}">${GRAV[a.gravite]||''}</span><span class="label">${esc(p?.nom||a.projet)} · audit Claude ${quand(a.quand)}</span></div>
+    <h2 id="dTitle">${esc(a.titre)}</h2><p>${esc(a.detail)}</p>
+    ${a.fichiers?.length?`<h4>Où regarder</h4><pre class="files">${a.fichiers.map(esc).join('\n')}</pre>`:''}
+    <div class="actions"><button type="button" class="btn primary" data-vu="${esc(a.id)}">Vu, je m'en occupe</button></div>`);
 }
 
-async function auditer(ids, bouton){
-  // Deux clics : l'audit consomme du quota Claude.
-  if(bouton && !bouton.dataset.arme){
-    bouton.dataset.arme = '1'; const avant = bouton.textContent;
-    bouton.textContent = ids.length ? 'Confirmer' : `Confirmer (${donnees.projets.length} projets)`;
-    setTimeout(()=>{ if(bouton.isConnected){ delete bouton.dataset.arme; bouton.textContent = avant; } }, 4000);
-    return;
-  }
-  try{ await api('/api/audit', {projets: ids}); toast(ids.length ? 'Audit lancé' : 'Audit lancé sur tous les projets'); setTimeout(charger, 800); }
-  catch(e){ toast(e.message); }
+function ouvrirRapport(id){
+  const p = D.projets.find(x=>x.id===id), r = p?.dernier; if(!r) return;
+  ouvrir(`<div class="label">audit Claude · ${quand(r.quand)} · ${Math.max(1,Math.round((r.duree||0)/60))} min</div>
+    <h2 id="dTitle">${esc(p.nom)}</h2><p>${esc(r.resume)}</p>
+    ${r.propositions?.length?`<h4>Propositions</h4><div class="liste">${r.propositions.map(x=>`<div><b>${esc(x.titre)}</b><br>${esc(x.detail)}</div>`).join('')}</div>`:''}`);
 }
 
+async function auditer(id, b){
+  if(!b.dataset.arme){ b.dataset.arme='1'; const avant=b.textContent; b.textContent='Confirmer (utilise le quota Claude)'; b.classList.add('danger');
+    setTimeout(()=>{ if(b.isConnected){ delete b.dataset.arme; b.textContent=avant; b.classList.remove('danger'); } },4000); return; }
+  try{ await api('/api/audit',{projets:[id]}); toast('Audit lancé'); fermer(); setTimeout(charger,800); }catch(e){ toast(e.message); }
+}
+
+// ---------- Interactions ----------
+function montrer(o){
+  onglet = o; try{ localStorage.setItem('zylot-onglet', o); }catch{}
+  document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-selected', t.dataset.onglet===o));
+  ['vue','surveillance','securite','propositions'].forEach(x=>$('#o-'+x).hidden = x!==o);
+}
 document.addEventListener('click', async e=>{
-  const b = e.target.closest('button, .scrim'); if(!b) return;
-  if(b.id==='scrim' && e.target===b) return fermer();
-  if(b.dataset.fermer !== undefined) return fermer();
+  const t = e.target.closest('[data-onglet]'); if(t) return montrer(t.dataset.onglet);
+  if(e.target.id==='scrim') return fermer();
+  const b = e.target.closest('button, tr[data-projet]'); if(!b) return;
+  if(b.dataset.fermer!==undefined) return fermer();
+  if(b.dataset.vu){ try{ await api('/api/alertes/'+b.dataset.vu+'/vu',{}); fermer(); toast('Marquée comme vue'); charger(); }catch(err){ toast(err.message); } return; }
   if(b.dataset.alerte) return ouvrirAlerte(b.dataset.alerte);
   if(b.dataset.rapport) return ouvrirRapport(b.dataset.rapport);
-  if(b.dataset.auditer) return auditer([b.dataset.auditer], b);
-  if(b.id==='toutAuditer') return auditer([], b);
-  if(b.dataset.vu){
-    try{ await api('/api/alertes/'+b.dataset.vu+'/vu', {}); fermer(); toast('Marquée comme vue'); charger(); }
-    catch(err){ toast(err.message); }
-  }
+  if(b.dataset.auditer) return auditer(b.dataset.auditer, b);
+  if(b.dataset.projet) return ouvrirProjet(b.dataset.projet);
+  if(b.id==='btnSurv'){ await api('/api/surveillance',{}).catch(()=>{}); toast('Vérification lancée'); setTimeout(charger,4000); }
+  if(b.id==='btnSecu'){ try{ await api('/api/securite',{}); toast('Contrôles lancés, une minute environ'); setTimeout(charger,1500); }catch(err){ toast(err.message); } }
 });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') fermer(); });
 
+async function charger(){
+  try{
+    D = await api('/api/etat');
+    $('#lien').textContent = 'à jour à ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    $('#lien').classList.remove('off');
+    rendre();
+  }catch{
+    $('#lien').textContent = 'serveur injoignable : lancez « node serveur.js »';
+    $('#lien').classList.add('off');
+  }
+}
+montrer(onglet);
 charger();
-setInterval(charger, 10000);
+setInterval(charger, 15000);
 </script>
 </body>
 </html>

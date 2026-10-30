@@ -8,6 +8,8 @@ Outil personnel : piloter Claude Code sur tous les projets depuis une seule inte
 - **Tout en local** sur le Mac puis le Mac Mini. Serveur lié à 127.0.0.1 ; requêtes POST exigent l'en-tête `X-Zylot: 1` et un `Host` localhost. Accès téléphone plus tard via Tailscale, pas d'hébergement public.
 - **Paliers** : 1) audit en lecture seule, **chaque semaine** (lundi 1 h) pour ménager le quota (fait) ; 2) écriture de code jusqu'à la PR ; 3) mise en prod sur feu vert, deux clics. Tout ce qui touche à la base, aux factures, aux données personnelles ou à l'authentification reste soumis à validation.
 - Node sans dépendance. Pas de framework.
+- Surveillance, contrôles de sécurité et état des dépôts tournent **sans Claude** dans `serveur.js` (coeur/surveillance.js, securite.js, depots.js) : zéro quota. Claude ne sert qu'à lire le code et proposer.
+- Adresse : http://zylot.localhost:4000 (le port 80 demande les droits administrateur sur macOS).
 - Dans l'interface, la ligue s'appelle « Ligue hockey » (le sigle est proscrit sur ce projet).
 
 ## Pièges connus

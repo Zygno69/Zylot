@@ -109,6 +109,6 @@ function poserVerrou(etat) { ecrire(F_VERROU, { pid: process.pid, ...etat }); }
 function leverVerrou() { fs.rmSync(F_VERROU, { force: true }); }
 
 module.exports = {
-  RACINE, config, projets, journal, lireJournal, enregistrerRapport, dernierRapport,
+  RACINE, DONNEES, lire, ecrire, aujourdhui, config, projets, journal, lireJournal, enregistrerRapport, dernierRapport,
   ajouterAlertes, alertesOuvertes, marquerVu, verrou, poserVerrou, leverVerrou,
 };

@@ -7,14 +7,18 @@ Il tourne sur le Mac (puis le Mac Mini), là où sont les dépôts et où Claude
 ## Ce qui marche (palier 1)
 
 - **Audit hebdomadaire en lecture seule** (lundi à 1 h) sur les projets de `projets.json` : sécurité du code, dépendances, site en ligne et certificat, état du dépôt, propositions. L'agent n'a le droit que de lire (voir `coeur/audit.js`) ; les réglages propres à chaque projet et les connecteurs sont ignorés.
-- **Interface** sur http://localhost:4000 : alertes à décider, état de chaque projet, rapport complet, journal, lancement d'un audit à la main.
+- **Interface** sur http://zylot.localhost:4000, en quatre onglets :
+  - **Vue d'ensemble** : un voyant par projet (site, certificat, code, note de sécurité, liens), la liste « À regarder », le journal.
+  - **Surveillance** (sans Claude, toutes les 5 min) : site en ligne, temps de réponse, disponibilité sur 24 h / 7 j / 30 j, certificat, pannes. Alerte au deuxième échec de suite.
+  - **Sécurité** (sans Claude, chaque jour) : fichiers sensibles exposés (`.git`, `.env`, sauvegardes SQL…), redirection HTTPS, en-têtes de protection, note de A à E ; plus l'audit du code par Claude.
+  - **Propositions** : ce que Zylot remarque seul (projet endormi, travail pas sur GitHub, en-têtes à ajouter) et les propositions des audits Claude.
 - **Notifications** sur le Mac ; sur le téléphone avec [ntfy](https://ntfy.sh) si un sujet est mis dans `config.local.json`.
 
 ## Installer
 
 ```bash
 cp config.local.example.json config.local.json   # facultatif : port, modèle, sujet ntfy
-./installer/installer.sh                         # serveur toujours allumé + audit le lundi à 1 h
+./installer/installer.sh                         # serveur toujours allumé (surveillance comprise) + audit le lundi à 1 h
 ```
 
 Retirer : `./installer/installer.sh retirer`. Audit à la main : `node nuit.js` (tous) ou `node nuit.js lmo plan2`.
