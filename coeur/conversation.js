@@ -88,18 +88,9 @@ async function preparerAtelier(p, c) {
   for (const dep of ['node_modules', 'vendor']) {
     if (fs.existsSync(path.join(p.dossier, dep)) && !fs.existsSync(path.join(chemin, dep))) fs.symlinkSync(path.join(p.dossier, dep), path.join(chemin, dep));
   }
-  // Projet en CI/CD : la mise en ligne, c'est GitHub Actions, déclenché par l'envoi sur main.
-  if (p.ci === 'github') {
-    const pu = await pousserVraiment(p);
-    if (pu.erreur) return pu;
-    const cg = lireConv(p.id); cg.demandeProd = null; cg.questionProd = null; cg.fichiersADeployer = [];
-    systeme(cg, 'Envoyé sur GitHub : la mise en ligne est faite par GitHub Actions (vérification, envoi, contrôle du site).'); ecrireConv(p.id, cg);
-    S.journal(p.nom, 'envoyé sur GitHub, mise en ligne par GitHub Actions');
-    return { ok: true, message: avant + 'Envoyé sur GitHub. GitHub Actions vérifie le code, met en ligne les fichiers changés et contrôle le site (2 à 3 minutes). Vérifie ensuite toi-même le site avec curl.' };
-  }
   const nc = await git(p.dossier, ['status', '--porcelain']);
   const n = nc.out ? nc.out.split('\n').length : 0;
-  c.atelier = { chemin, branche, depart: head.out, creeLe: new Date().toISOString() };
+  c.atelier ={ chemin, branche, depart: head.out, creeLe: new Date().toISOString() };
   if (!c.messages.some(m => m.role === 'systeme' && /^Copie de travail/.test(m.texte)) || n) {
     systeme(c, `Copie de travail prête (branche ${branche}).` + (n ? ` ${n} fichier${n > 1 ? 's' : ''} modifié${n > 1 ? 's' : ''} dans votre dossier mais pas commité${n > 1 ? 's' : ''} : Claude ne les voit pas.` : ''));
   }

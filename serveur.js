@@ -156,7 +156,16 @@ function lancerAudit(ids) {
   enfant.unref();
 }
 
-http.createServer(async (req, res) => {
+// Une erreur dans une requête ne doit jamais faire tomber le serveur (et avec lui la surveillance).
+process.on('unhandledRejection', e => console.error('Erreur non rattrapée :', e));
+process.on('uncaughtException', e => console.error('Exception non rattrapée :', e));
+
+http.createServer((req, res) => traiter(req, res).catch(e => {
+  console.error('Requête en échec :', req.method, req.url, e);
+  if (!res.headersSent) json(res, 500, { erreur: 'Erreur interne de Zylot : ' + e.message });
+})).listen(port, '127.0.0.1', () => console.log(`Zylot : http://zylot.localhost:${port}`));
+
+async function traiter(req, res) {
   // Refuser tout ce qui ne vient pas de ce Mac par son nom attendu (protège contre les pages web qui tenteraient d'appeler Zylot).
   if (!HOTES.has(req.headers.host)) return json(res, 403, { erreur: 'Hôte refusé' });
   const url = new URL(req.url, 'http://localhost');
@@ -245,4 +254,4 @@ http.createServer(async (req, res) => {
     }
   }
   json(res, 404, { erreur: 'Introuvable' });
-}).listen(port, '127.0.0.1', () => console.log(`Zylot : http://zylot.localhost:${port}`));
+}
