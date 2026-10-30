@@ -31,11 +31,32 @@ const ENTETES = [
   { nom: 'referrer-policy', titre: 'Referrer-Policy', pourquoi: 'évite de transmettre les adresses de vos pages à d\'autres sites', points: 2 },
 ];
 
+// Clés qui ne doivent jamais se trouver dans une page servie au navigateur. On ne garde que le type, jamais la valeur.
+const SECRETS = [
+  { quoi: 'clé Stripe secrète', motif: /\b(sk|rk)_live_[A-Za-z0-9]{16,}/ },
+  { quoi: 'clé secrète Supabase', motif: /\bsb_secret_[A-Za-z0-9_-]{16,}/ },
+  { quoi: 'clé AWS', motif: /\bAKIA[0-9A-Z]{16}\b/ },
+  { quoi: 'clé OpenAI', motif: /\bsk-(proj-)?[A-Za-z0-9_-]{32,}/ },
+  { quoi: 'clé Anthropic', motif: /\bsk-ant-[A-Za-z0-9_-]{20,}/ },
+  { quoi: 'clé privée', motif: /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/ },
+];
+function jetonsDangereux(texte) {
+  const trouves = [];
+  for (const t of texte.match(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g) || []) {
+    try {
+      const d = JSON.parse(Buffer.from(t.split('.')[1], 'base64url').toString());
+      if (d.role === 'service_role') trouves.push('clé Supabase service_role (accès total à la base)');
+    } catch {}
+  }
+  for (const x of SECRETS) if (x.motif.test(texte)) trouves.push(x.quoi);
+  return [...new Set(trouves)];
+}
+
 async function obtenir(url, opts = {}) {
   try {
     const r = await fetch(url, { headers: { 'User-Agent': AGENT }, signal: AbortSignal.timeout(12000), ...opts });
     const buf = Buffer.from(await r.arrayBuffer());
-    return { code: r.status, entetes: Object.fromEntries(r.headers), corps: buf.subarray(0, 20000).toString('latin1'), location: r.headers.get('location') };
+    return { code: r.status, entetes: Object.fromEntries(r.headers), corps: buf.subarray(0, opts.taille || 20000).toString('latin1'), location: r.headers.get('location') };
   } catch (e) {
     const code = e.cause && e.cause.code;
     return { erreur: require('./surveillance').ERREURS[code] || code || e.message };
@@ -81,6 +102,27 @@ async function controler(p) {
     }
   }
   res.fichiersTestes = SENSIBLES.length;
+
+  // Clés secrètes dans les pages publiques et leurs scripts (accueil, pages d'admin courantes, JavaScript du même site).
+  res.secrets = [];
+  const pages = ['/', '/admin.html', '/admin/', '/admin', '/dashboard.html', '/login.html'];
+  const vues = new Set(), scripts = new Set();
+  for (const chemin of pages) {
+    const r = await obtenir(base + chemin, { taille: 3e6 });
+    if (r.code !== 200 || !r.corps || vues.has(r.corps.length + chemin.length)) continue;
+    vues.add(r.corps.length + chemin.length);
+    for (const quoi of jetonsDangereux(r.corps)) res.secrets.push({ ou: base + chemin, quoi });
+    for (const m of r.corps.matchAll(/<script[^>]+src=["']([^"']+\.js[^"']*)["']/gi)) {
+      try { const u = new URL(m[1], base + chemin); if (u.hostname === hote && scripts.size < 10) scripts.add(u.href); } catch {}
+    }
+  }
+  for (const u of scripts) {
+    const r = await obtenir(u, { taille: 6e6 });
+    if (r.code === 200) for (const quoi of jetonsDangereux(r.corps)) res.secrets.push({ ou: u, quoi });
+  }
+  for (const x of res.secrets) {
+    ajout('urgent', `Clé secrète visible en ligne : ${x.quoi}`, `Elle est lisible par n'importe qui dans ${x.ou} (code source de la page). La changer tout de suite chez le fournisseur (l'ancienne est compromise), puis la retirer du site : une clé secrète ne doit jamais être dans une page web, seulement côté serveur.`, 60);
+  }
   return res;
 }
 
@@ -100,6 +142,12 @@ async function tour(prevenir) {
     const avant = tous[p.id];
     const r = await controler(p);
     tous[p.id] = r;
+    for (const x of r.secrets || []) {
+      if (!avant || !(avant.secrets || []).some(y => y.ou === x.ou && y.quoi === x.quoi)) {
+        S.journal(p.nom, `clé secrète visible en ligne : ${x.quoi}`, 'urgent');
+        prevenir && prevenir(`Clé exposée sur ${p.nom}`, `${x.quoi} visible dans ${x.ou}`, true);
+      }
+    }
     for (const chemin of r.exposes) {
       if (!avant || !(avant.exposes || []).includes(chemin)) {
         S.journal(p.nom, `fichier exposé : ${chemin}`, 'urgent');

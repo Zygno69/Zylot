@@ -423,6 +423,7 @@ function rendreSecurite(P){
     else if(!c.entetes) checks = `<ul class="checks">${ligne(false, esc(c.points[0]?.detail||'Site injoignable'))}</ul>`;
     else checks = `<ul class="checks">
         ${ligne(!c.exposes.length, c.exposes.length ? 'Fichiers exposés : '+c.exposes.map(esc).join(', ') : `Aucun fichier sensible exposé (${c.fichiersTestes} testés)`)}
+        ${ligne(!(c.secrets||[]).length, (c.secrets||[]).length ? 'Clé secrète visible en ligne : '+c.secrets.map(x=>esc(x.quoi)+' ('+esc(x.ou.replace(/^https?:\/\/[^/]+/,''))+')').join(', ') : 'Aucune clé secrète visible dans les pages et scripts')}
         ${ligne(true, 'HTTPS en place, certificat valide')}
         ${ligne(c.redirigeHttps, c.redirigeHttps ? 'http:// renvoie vers https://' : 'http:// ne renvoie pas vers https:// (le site reste joignable en clair)')}
         ${Object.entries(c.entetes).map(([k,v])=>ligne(v, esc(k))).join('')}
