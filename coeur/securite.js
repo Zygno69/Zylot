@@ -169,4 +169,4 @@ async function unProjet(p) {
 
 function derniers() { return S.lire(F, {}); }
 
-module.exports = { tour, derniers, note, unProjet };
+module.exports = { tour, derniers, note, unProjet, jetonsDangereux };

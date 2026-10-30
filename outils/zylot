@@ -2,13 +2,13 @@
 // Commande donnée à Claude pendant une conversation : zylot garder "message" | zylot deployer | zylot etat.
 // Elle ne fait que demander au serveur Zylot, qui vérifie le jeton de la conversation et la demande du propriétaire.
 const action = process.argv[2];
-if (!['garder', 'deployer', 'pousser', 'etat'].includes(action)) { console.error('Usage : zylot garder "message" | zylot deployer | zylot pousser | zylot etat'); process.exit(2); }
+if (!['garder', 'commiter', 'deployer', 'pousser', 'etat'].includes(action)) { console.error('Usage : zylot garder "message" | zylot deployer | zylot pousser | zylot etat'); process.exit(2); }
 const { ZYLOT_PROJET: projet, ZYLOT_JETON: jeton, ZYLOT_PORT: port = '4000' } = process.env;
 if (!projet || !jeton) { console.error('zylot ne fonctionne que dans une conversation lancée par Zylot.'); process.exit(2); }
 fetch(`http://localhost:${port}/api/agent/${projet}/${action}`, {
   method: 'POST',
   headers: { 'X-Zylot': '1', 'X-Zylot-Jeton': jeton, 'Content-Type': 'application/json' },
-  body: JSON.stringify({ message: process.argv.slice(3).join(' ') }),
+  body: JSON.stringify(action === 'commiter' ? { message: process.argv[3] || '', fichiers: process.argv.slice(4) } : { message: process.argv.slice(3).join(' ') }),
   signal: AbortSignal.timeout(16 * 60e3),
 }).then(async r => {
   const j = await r.json().catch(() => ({}));

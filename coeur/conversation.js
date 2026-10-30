@@ -37,7 +37,7 @@ function cheminImage(id, nom) {
 const enCours = new Map(); // projet → { enfant, jeton }
 const prodEnCours = new Set();
 // À augmenter quand les consignes changent : les conversations repartent alors sur une session neuve, avec un résumé.
-const VERSION_CONSIGNES = 10;
+const VERSION_CONSIGNES = 11;
 
 // Ce que Claude peut faire seul, dans sa copie. Tout le reste est refusé sans lui demander.
 const AUTORISE = [
@@ -46,7 +46,7 @@ const AUTORISE = [
   'Bash(ls:*)', 'Bash(cat:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(grep:*)', 'Bash(sort:*)', 'Bash(uniq:*)',
   'Bash(curl -s:*)', 'Bash(curl -I:*)', 'Bash(curl -sI:*)', 'Bash(curl -sIL:*)', 'Bash(curl -s -I:*)',
   'Bash(php -l:*)', 'Bash(node --check:*)', 'Bash(npm run build:*)', 'Bash(npm run lint:*)', 'Bash(npm test:*)', 'Bash(npx eslint:*)',
-  'Bash(sleep:*)', 'Bash(zylot garder:*)', 'Bash(zylot pousser)', 'Bash(zylot deployer:*)', 'Bash(zylot etat)',
+  'Bash(sleep:*)', 'Bash(zylot garder:*)', 'Bash(zylot commiter:*)', 'Bash(zylot pousser)', 'Bash(zylot deployer:*)', 'Bash(zylot etat)',
 ];
 const INTERDIT = ['Agent', 'Task', 'WebSearch', 'Bash(git push:*)', 'Bash(git remote:*)', 'Bash(git commit:*)', 'Bash(git checkout:*)', 'Bash(git reset:*)', 'Bash(rm:*)', 'NotebookEdit'];
 
@@ -68,7 +68,15 @@ function etat(id) { return { ...lireConv(id), enCours: enCours.has(id), prodEnCo
 
 // La copie de travail : créée au besoin, à partir du dernier commit du projet.
 async function preparerAtelier(p, c) {
-  if (c.atelier && fs.existsSync(c.atelier.chemin)) return null;
+  if (c.atelier && fs.existsSync(c.atelier.chemin)) {
+    // Copie sans modification en cours, et le propriétaire a commité depuis : on la remet à jour (avance rapide uniquement).
+    const propre = !(await git(c.atelier.chemin, ['status', '--porcelain', '--', '.', ':!node_modules', ':!vendor', ':!dist'])).out;
+    const tete = (await git(p.dossier, ['rev-parse', 'HEAD'])).out;
+    if (propre && tete && (await git(c.atelier.chemin, ['merge', '--ff-only', tete])).ok) {
+      const cc = c; if (cc.appliqueJusqua) cc.appliqueJusqua = null;
+    }
+    return null;
+  }
   const head = await git(p.dossier, ['rev-parse', 'HEAD']);
   if (!head.ok) return 'Ce projet n\'a pas encore de commit : Claude a besoin d\'un point de départ enregistré dans git.';
   const branche = 'zylot/' + p.id + '-' + new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
@@ -99,11 +107,12 @@ Comment tu travailles :
 - Commandes Zylot (outil Bash) :
   · \`zylot garder "Message de commit"\` : intègre tes modifications dans le vrai projet, avec un message de commit que tu écris (une ligne claire qui dit ce qui a été fait, en français). Seulement quand il est d'accord.
   · \`zylot deployer "Message de commit"\` : garde tes modifications si besoin, puis met en ligne avec la commande de déploiement du projet et vérifie le site. Tu as le droit de le faire dès qu'il te le demande, avec ses mots à lui (« déploie », « mets en ligne », « fais-le toi »…). Si sa demande n'est pas assez explicite pour Zylot, un bouton « Mettre en ligne » s'affiche chez lui : dis-lui simplement de cliquer. Ça peut prendre plusieurs minutes.
+  · \`zylot commiter "Message" fichier1 fichier2 …\` : enregistre (commit) dans le vrai dossier du projet des fichiers du TRAVAIL EN COURS du propriétaire (pas les tiens : pour les tiens c'est garder). Chemins relatifs au dossier du projet. Liste-lui d'abord ce que tu comptes enregistrer ; s'il est d'accord, lance-le. Zylot refuse les fichiers qui contiennent une clé secrète ou qui sont des fichiers de configuration sensibles.
   · \`zylot pousser\` : envoie les commits du projet sur GitHub (sauvegarde). Seulement quand son dernier message le demande (« pousse », « envoie sur GitHub »…) ; Zylot refuse sinon. Jamais de push forcé.
   · \`zylot etat\` : l'état actuel du site et du dépôt vu par Zylot.
 - Quand une mise en prod serait utile, propose-la simplement (« je la mets en ligne ? ») : s'il répond « déploie » ou « mets en ligne », tu lances \`zylot deployer\`. Préviens-le avant si des fichiers non commités de son dossier partiraient avec (sauf si la commande de mise en prod contient {fichiers} : seuls tes fichiers partent).
 - Pour vérifier le site en ligne, utilise \`curl -sI\` (ou WebFetch sur le site du projet).
-- Tu ne lances jamais git push ni git commit toi-même : tu passes par \`zylot garder\` et \`zylot pousser\`.
+- Tu ne lances jamais git add, git commit ni git push toi-même : tu passes par \`zylot garder\`, \`zylot commiter\` et \`zylot pousser\`.
 - Lance toujours une commande \`zylot\` seule, jamais enchaînée avec une autre (pas de && ni de ;) : si une partie de la ligne est refusée, toute la ligne l'est.
 - Tu écris uniquement dans ta copie (le dossier courant). Le vrai dossier du projet (indiqué plus bas) est lisible : c'est là que se trouve le travail en cours du propriétaire, pas encore commité (git -C <dossier> status / diff, Read, Grep). Ta copie part du dernier commit et ne contient pas ce travail en cours. Pour vérifier une mise en ligne, regarde le site avec curl.
 - Si une commande t'est refusée, regarde pourquoi (souvent : un chemin hors de ta copie, ou une commande enchaînée) et réessaie autrement ; si c'est vraiment bloqué, dis ce dont tu avais besoin, sans chercher à contourner.
@@ -440,6 +449,39 @@ function arreter(id) {
   return { ok: !!e };
 }
 
+// Enregistrer dans le vrai dossier une partie du travail en cours du propriétaire.
+const NOMS_SENSIBLES = /(^|\/)(\.env(\..*)?|.*\.netrc|ftp\.config\.json|config\.local\.php|.*\.pem|.*\.key|id_rsa.*)$/i;
+async function commiter(p, message, fichiers) {
+  if (!message || !String(message).trim()) return { erreur: 'Il faut un message de commit : zylot commiter "Message" fichier1 fichier2…' };
+  if (!fichiers.length) return { erreur: 'Aucun fichier indiqué.' };
+  const { jetonsDangereux } = require('./securite');
+  const acceptes = [], refuses = [];
+  for (const f of fichiers) {
+    const abs = path.resolve(p.dossier, f);
+    if (!abs.startsWith(p.dossier + path.sep)) { refuses.push(`${f} (hors du projet)`); continue; }
+    const rel = path.relative(p.dossier, abs);
+    if (NOMS_SENSIBLES.test(rel)) { refuses.push(`${rel} (fichier de configuration sensible)`); continue; }
+    if (fs.existsSync(abs)) {
+      const st = fs.statSync(abs);
+      const lire = d => { for (const x of fs.readdirSync(d, { withFileTypes: true })) { const q = path.join(d, x.name); if (x.isDirectory()) lire(q); else if (fs.statSync(q).size < 2e6) { const k = jetonsDangereux(fs.readFileSync(q, 'latin1')); if (k.length) refuses.push(`${path.relative(p.dossier, q)} (contient : ${k.join(', ')})`); } } };
+      const avantRefus = refuses.length;
+      if (st.isDirectory()) lire(abs);
+      else if (st.size < 2e6) { const k = jetonsDangereux(fs.readFileSync(abs, 'latin1')); if (k.length) refuses.push(`${rel} (contient : ${k.join(', ')})`); }
+      if (refuses.length > avantRefus) continue;
+    }
+    acceptes.push(rel);
+  }
+  if (!acceptes.length) return { erreur: 'Rien enregistré. Refusés : ' + refuses.join(' ; ') };
+  const a = await git(p.dossier, ['add', '--', ...acceptes]);
+  if (!a.ok) return { erreur: 'git add impossible : ' + a.err };
+  const r = await git(p.dossier, ['commit', '-m', `${String(message).trim().slice(0, 300)}\n\nEnregistré avec Zylot.`, '--', ...acceptes]);
+  if (!r.ok) return { erreur: 'Commit impossible : ' + (r.err || r.out) };
+  const resume = (await git(p.dossier, ['log', '-1', '--format=%h', '--shortstat'])).out.replace(/\s+/g, ' ');
+  S.journal(p.nom, `travail en cours enregistré : ${acceptes.length} élément(s)`);
+  const cc = lireConv(p.id); systeme(cc, `Commit dans votre dossier : ${acceptes.join(', ')}.` + (refuses.length ? ` Refusés : ${refuses.join(' ; ')}.` : '')); ecrireConv(p.id, cc);
+  return { ok: true, message: `Commit fait (${resume}) : ${acceptes.join(', ')}.` + (refuses.length ? `\nRefusés par Zylot : ${refuses.join(' ; ')}.` : '') };
+}
+
 // Envoyer les commits du projet sur GitHub, à la demande du propriétaire.
 async function pousser(p) {
   const c = lireConv(p.id);
@@ -457,4 +499,4 @@ async function pousser(p) {
 
 function annulerProd(id) { const c = lireConv(id); if (c.demandeProd || c.questionProd) { c.demandeProd = null; c.questionProd = null; systeme(c, 'Mise en ligne annulée.'); ecrireConv(id, c); } return { ok: true }; }
 
-module.exports = { enregistrerImage, cheminImage, etat, envoyer, garder, deployer, pousser, jeter, nouvelle, arreter, jetonValide, annulerProd, enCours };
+module.exports = { enregistrerImage, cheminImage, etat, envoyer, garder, deployer, pousser, commiter, jeter, nouvelle, arreter, jetonValide, annulerProd, enCours };
