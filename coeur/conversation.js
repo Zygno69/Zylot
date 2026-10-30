@@ -17,7 +17,7 @@ fs.mkdirSync(ATELIERS, { recursive: true });
 const enCours = new Map(); // projet → { enfant, jeton }
 const prodEnCours = new Set();
 // À augmenter quand les consignes changent : les conversations repartent alors sur une session neuve, avec un résumé.
-const VERSION_CONSIGNES = 8;
+const VERSION_CONSIGNES = 9;
 
 // Ce que Claude peut faire seul, dans sa copie. Tout le reste est refusé sans lui demander.
 const AUTORISE = [
@@ -238,34 +238,65 @@ async function retirerAtelier(p, c) {
   await git(p.dossier, ['worktree', 'prune']);
 }
 
-// Garder : commit sur la branche de Claude, puis avance rapide de la branche du projet. Jamais d'écrasement : si ce n'est pas possible, la branche reste à fusionner.
+// Garder : intégrer dans le vrai projet ce que Claude a fait dans sa copie.
+// - Dossier propre sur ces fichiers : commit sur la branche de Claude, puis avance rapide de la branche du projet.
+// - Le propriétaire a du travail en cours sur les mêmes fichiers : on applique seulement les changements de Claude
+//   par-dessus, sans commit, sans toucher aux siens. Si les deux se chevauchent, on ne touche à rien.
 async function garder(p, messageCommit) {
   const c = lireConv(p.id);
+  if (!c.atelier || !fs.existsSync(c.atelier.chemin)) return { ok: true, message: 'Rien à garder : aucune modification en attente.' };
   c.modif = await lireModif(c.atelier);
-  if (!c.atelier || !c.modif) return { ok: true, message: 'Rien à garder : aucune modification en attente.' };
-  const titre = (messageCommit && String(messageCommit).trim().slice(0, 300)) ||
-    'Modifications préparées avec Claude : ' + c.modif.fichiers.map(f => f.chemin).slice(0, 4).join(', ');
-  const r = await git(c.atelier.chemin, ['commit', '-m', `${titre}\n\nPréparé avec Zylot.\n\nCo-Authored-By: Claude <noreply@anthropic.com>`]);
-  if (!r.ok) return { erreur: 'Commit impossible : ' + r.err };
+  const at = c.atelier.chemin;
+  if (c.modif) {
+    const titre = (messageCommit && String(messageCommit).trim().slice(0, 300)) ||
+      'Modifications préparées avec Claude : ' + c.modif.fichiers.map(f => f.chemin).slice(0, 4).join(', ');
+    const r = await git(at, ['commit', '-m', `${titre}\n\nPréparé avec Zylot.\n\nCo-Authored-By: Claude <noreply@anthropic.com>`]);
+    if (!r.ok) return { erreur: 'Commit impossible : ' + r.err };
+  }
+  const tete = (await git(at, ['rev-parse', 'HEAD'])).out;
   const principale = (await git(p.dossier, ['rev-parse', '--abbrev-ref', 'HEAD'])).out;
-  const avantFusion = (await git(p.dossier, ['rev-parse', 'HEAD'])).out;
+  const avant = (await git(p.dossier, ['rev-parse', 'HEAD'])).out;
+  // Déjà intégré ? (dans l'historique du projet, ou déjà appliqué par-dessus le travail en cours)
+  const dejaDansLeProjet = (await git(p.dossier, ['merge-base', '--is-ancestor', tete, avant])).ok;
+  if (dejaDansLeProjet || c.appliqueJusqua === tete) return { ok: true, message: 'Rien à garder : tout est déjà dans le projet.' };
+
+  let message, ok = true, fichiers = [];
   const fusion = await git(p.dossier, ['merge', '--ff-only', c.atelier.branche]);
-  // La copie de travail reste en place (Claude est peut-être encore dedans) : sa branche est simplement à jour avec le projet.
-  const branche = c.atelier.branche;
-  let message;
   if (fusion.ok) {
-    message = `Gardé : ${c.modif.resume}, sur ${principale}. Rien n'est encore en ligne.`;
+    fichiers = (await git(p.dossier, ['diff', '--name-only', '--diff-filter=ACMR', avant + '..HEAD'])).out.split('\n').filter(Boolean);
+    message = `Gardé : commit sur ${principale} (${fichiers.join(', ')}). Rien n'est encore en ligne.`;
     S.journal(p.nom, `modification de Claude gardée sur ${principale}`);
   } else {
-    message = `Enregistré sur la branche ${branche}, mais impossible de l'amener sur ${principale} sans risque (${fusion.err.split('\n')[0]}). Le dossier du projet n'a pas bougé.`;
-    S.journal(p.nom, `modification enregistrée sur ${branche}, fusion à faire`);
+    // Appliquer seulement ce qui n'a pas encore été appliqué.
+    const base = c.appliqueJusqua || (await git(p.dossier, ['merge-base', avant, tete])).out;
+    const patch = await new Promise(res => execFile('git', ['-C', at, 'diff', '--binary', base, tete], { maxBuffer: 5e7 }, (e, out) => res(e ? null : out)));
+    fichiers = (await git(at, ['diff', '--name-only', '--diff-filter=ACMR', base, tete])).out.split('\n').filter(Boolean);
+    const appliquer = (args) => new Promise(res => {
+      const e = spawn('git', ['-C', p.dossier, 'apply', ...args]);
+      let err = ''; e.stderr.on('data', d => err += d);
+      e.on('close', code => res({ ok: code === 0, err: err.trim() }));
+      e.stdin.end(patch || '');
+    });
+    const test = patch ? await appliquer(['--check']) : { ok: false, err: 'diff illisible' };
+    if (test.ok && (await appliquer([])).ok) {
+      message = `Gardé : appliqué dans votre dossier (${fichiers.join(', ')}), sans commit, car vous avez du travail en cours sur ces fichiers ; vos propres modifications sont conservées. Rien n'est encore en ligne.`;
+      S.journal(p.nom, `modification de Claude appliquée par-dessus le travail en cours (${fichiers.join(', ')})`);
+      const cc0 = lireConv(p.id); cc0.appliqueJusqua = tete; ecrireConv(p.id, cc0);
+    } else {
+      ok = false;
+      message = `Pas gardé : vos modifications en cours et celles de Claude touchent les mêmes lignes de ${fichiers.join(', ')}. Rien n'a été changé dans votre dossier. Commitez (ou mettez de côté) votre travail sur ces fichiers, puis redemandez.`;
+      S.journal(p.nom, 'modification de Claude non intégrée : chevauchement avec le travail en cours', 'erreur');
+    }
   }
   const cc = lireConv(p.id);
   cc.modif = null; systeme(cc, message);
-  // Le point de départ de ce qui n'est pas encore en ligne : sert aux projets qui déploient fichier par fichier.
-  if (fusion.ok && !cc.aDeployerDepuis) cc.aDeployerDepuis = avantFusion;
+  if (ok) {
+    // Ce qui n'est pas encore en ligne : sert aux projets qui déploient fichier par fichier.
+    cc.fichiersADeployer = [...new Set([...(cc.fichiersADeployer || []), ...fichiers])];
+    if (fusion.ok) cc.appliqueJusqua = null;
+  }
   ecrireConv(p.id, cc);
-  return { ok: fusion.ok, message };
+  return { ok, message };
 }
 
 // stdin reçoit la réponse donnée par le propriétaire (s'il y en a une), puis il est fermé : un script qui pose une question ne reste jamais bloqué.
@@ -303,6 +334,8 @@ async function deployerVraiment(p, verifierApres, messageCommit, reponse) {
   let avant = '';
   const g = await garder(p, messageCommit);
   if (g.erreur) return g;
+  // Si la modification de Claude n'a pas pu entrer dans le projet, on ne met surtout pas en ligne l'ancienne version.
+  if (!g.ok) return { erreur: 'Mise en ligne annulée : ' + g.message };
   if (!/^Rien à garder/.test(g.message)) avant = g.message + '\n';
   const nc = await git(p.dossier, ['status', '--porcelain']);
   const n = nc.out ? nc.out.split('\n').length : 0;
@@ -310,11 +343,8 @@ async function deployerVraiment(p, verifierApres, messageCommit, reponse) {
   // « {fichiers} » dans la commande : seulement les fichiers changés depuis la dernière mise en ligne faite par Zylot.
   let argv = p.deploy.split(/\s+/).filter(Boolean), envoyes = null;
   if (argv.includes('{fichiers}')) {
-    const cc = lireConv(p.id);
-    if (!cc.aDeployerDepuis) return { erreur: 'Rien à mettre en ligne : aucune modification gardée depuis la dernière mise en ligne.' };
-    const d = await git(p.dossier, ['diff', '--name-only', '--diff-filter=ACMR', cc.aDeployerDepuis + '..HEAD']);
-    envoyes = d.out ? d.out.split('\n') : [];
-    if (!envoyes.length) return { erreur: 'Rien à mettre en ligne : aucun fichier changé.' };
+    envoyes = (lireConv(p.id).fichiersADeployer || []).filter(f => fs.existsSync(path.join(p.dossier, f)));
+    if (!envoyes.length) return { erreur: 'Rien à mettre en ligne : aucune modification gardée depuis la dernière mise en ligne.' };
     argv = argv.flatMap(a => a === '{fichiers}' ? envoyes : [a]);
   }
   const r = await executer(argv, p.dossier, 15 * 60e3, reponse);
@@ -338,7 +368,7 @@ async function deployerVraiment(p, verifierApres, messageCommit, reponse) {
     (envoyes ? ` Fichiers envoyés : ${envoyes.join(', ')}.` : (n ? ` Attention : ${n} fichier${n > 1 ? 's' : ''} non commité${n > 1 ? 's' : ''} du dossier sont partis avec.` : '')) +
     `\n\nFin de la sortie de « ${p.deploy} » :\n${fin}` + (verif ? '\n\nVérification après mise en ligne :\n' + verif : '');
   const cc = lireConv(p.id); cc.demandeProd = null; cc.questionProd = null;
-  if (ok) cc.aDeployerDepuis = null;
+  if (ok) cc.fichiersADeployer = [];
   systeme(cc, ok ? 'Mis en ligne.' + (verif ? ' ' + verif.replace(/\n/g, ' ') : '') : `La mise en ligne a échoué (code ${r.code}) :\n${fin.split('\n').slice(-8).join('\n')}`);
   ecrireConv(p.id, cc);
   return { ok, message };
