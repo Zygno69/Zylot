@@ -333,7 +333,11 @@ async function deployer(p, verifierApres, messageCommit, { confirme = false, rep
   }
   if (prodEnCours.has(p.id)) return { erreur: 'Une mise en prod est déjà en cours.' };
   prodEnCours.add(p.id);
-  try { return await deployerVraiment(p, verifierApres, messageCommit || (c.demandeProd && c.demandeProd.message), reponse); }
+  try {
+    const r = await deployerVraiment(p, verifierApres, messageCommit || (c.demandeProd && c.demandeProd.message), reponse);
+    if (r.erreur) { const cc = lireConv(p.id); cc.demandeProd = null; systeme(cc, r.erreur); ecrireConv(p.id, cc); }
+    return r;
+  }
   finally { prodEnCours.delete(p.id); }
 }
 
@@ -346,7 +350,6 @@ async function deployerVraiment(p, verifierApres, messageCommit, reponse) {
   if (!/^Rien à garder/.test(g.message)) avant = g.message + '\n';
   const nc = await git(p.dossier, ['status', '--porcelain']);
   const n = nc.out ? nc.out.split('\n').length : 0;
-  S.journal(p.nom, 'mise en prod lancée depuis la conversation');
   // « {fichiers} » dans la commande : seulement les fichiers changés depuis la dernière mise en ligne faite par Zylot.
   let argv = p.deploy.split(/\s+/).filter(Boolean), envoyes = null;
   if (argv.includes('{fichiers}')) {
@@ -354,6 +357,7 @@ async function deployerVraiment(p, verifierApres, messageCommit, reponse) {
     if (!envoyes.length) return { erreur: 'Rien à mettre en ligne : aucune modification gardée depuis la dernière mise en ligne.' };
     argv = argv.flatMap(a => a === '{fichiers}' ? envoyes : [a]);
   }
+  S.journal(p.nom, 'mise en prod lancée depuis la conversation');
   const r = await executer(argv, p.dossier, 15 * 60e3, reponse);
   const fin = r.sortie.trim().split('\n').slice(-25).join('\n');
   // Le script a posé une question qu'il faut transmettre au propriétaire.

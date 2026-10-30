@@ -141,8 +141,8 @@ async function verifierApresMiseEnLigne(p) {
 function lancerMiseEnLigne(p, reponse) {
   conversation.deployer(p, () => verifierApresMiseEnLigne(p), null, { confirme: true, reponse })
     .then(async r => {
-      if (r.erreur && !r.message) r.message = r.erreur;
-      if (/pose une question/.test(r.message || '')) return;
+      // Rien n'est parti (rien à envoyer, garder impossible, question posée) : inutile de relancer Claude.
+      if (r.erreur || /pose une question/.test(r.message || '')) return;
       await conversation.envoyer(p, `La mise en ligne lancée par le propriétaire est terminée. Compte rendu de Zylot :\n${r.message}\n\nVérifie toi-même sur le site (curl) que ce qui devait partir est bien en ligne, puis dis-lui en deux ou trois phrases ce que tu constates.`,
         await contexteProjet(p), { role: 'zylot' });
     })
