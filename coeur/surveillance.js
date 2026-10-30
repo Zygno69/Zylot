@@ -82,18 +82,38 @@ function resume(id) {
   return { etat, dispo24: dispo(h, 24), dispo7: dispo(h, 168), dispo30: dispo(h, 720), heures, pannes: pannes.slice(-5).reverse(), mesures: h.length };
 }
 
-// Un tour de surveillance sur tous les sites. Une panne n'est annoncée qu'au deuxième échec de suite, pour éviter les fausses alertes.
-async function tour(prevenir) {
+// Le commit en ligne, si le site publie zylot-version.txt (« <sha> <date> »), déposé à chaque mise en ligne par la CI.
+async function versionEnLigne(site) {
+  try {
+    const r = await fetch(site.replace(/\/$/, '') + '/zylot-version.txt', { headers: { 'User-Agent': AGENT, 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const m = (await r.text()).trim().match(/^([0-9a-f]{7,40})\s+(\S+)/);
+    return m ? { sha: m[1], date: m[2] } : null;
+  } catch { return null; }
+}
+
+// Un tour de surveillance sur tous les sites (ou un seul). Une panne n'est annoncée qu'au deuxième échec de suite, pour éviter les fausses alertes.
+// hooks.surMiseEnLigne(p, version) est appelé quand une nouvelle version apparaît sur un site.
+async function tour(prevenir, hooks = {}, seulement = null) {
   const fEtat = path.join(DOSSIER, 'etat.json');
   const etats = S.lire(fEtat, {});
-  for (const p of S.projets().filter(p => p.site)) {
+  for (const p of S.projets().filter(p => p.site && (!seulement || p.id === seulement))) {
     const v = await verifier(p.site);
     fs.appendFileSync(path.join(DOSSIER, p.id + '.jsonl'), JSON.stringify({ quand: v.quand, ok: v.ok, code: v.code, ms: v.ms, erreur: v.erreur }) + '\n');
     const avant = etats[p.id] || {};
     const echecs = v.ok ? 0 : (avant.echecs || 0) + 1;
     const cert = (!avant.cert || !avant.certVerifie || Date.now() - new Date(avant.certVerifie) > 6 * 36e5)
       ? await certificat(new URL(p.site).hostname) : avant.cert;
-    etats[p.id] = { ...v, echecs, enPanne: echecs >= 2, cert, certVerifie: cert === avant.cert ? avant.certVerifie : new Date().toISOString() };
+    const version = await versionEnLigne(p.site);
+    etats[p.id] = { ...v, echecs, enPanne: echecs >= 2, cert, certVerifie: cert === avant.cert ? avant.certVerifie : new Date().toISOString(), version: version || avant.version || null };
+    if (version && (!avant.version || avant.version.sha !== version.sha)) {
+      S.noterDeploiement(p.id, { sha: version.sha, misEnLigne: version.date, via: 'CI GitHub', premiereLecture: !avant.version });
+      if (avant.version) {
+        S.journal(p.nom, `nouvelle version en ligne : ${version.sha.slice(0, 7)}`);
+        prevenir && prevenir(`${p.nom} est en ligne`, `Version ${version.sha.slice(0, 7)} en production.`);
+        hooks.surMiseEnLigne && hooks.surMiseEnLigne(p, version);
+      }
+    }
 
     if (echecs === 2) {
       S.journal(p.nom, `site en panne : ${v.erreur || 'code ' + v.code}`, 'urgent');

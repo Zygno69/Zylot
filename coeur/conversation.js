@@ -36,8 +36,11 @@ function cheminImage(id, nom) {
 
 const enCours = new Map(); // projet → { enfant, jeton }
 const prodEnCours = new Set();
+// Branché par le serveur : surveille un site de près après un envoi sur GitHub.
+let suivreMiseEnLigne = null;
+function surMiseEnLigneSuivie(f) { suivreMiseEnLigne = f; }
 // À augmenter quand les consignes changent : les conversations repartent alors sur une session neuve, avec un résumé.
-const VERSION_CONSIGNES = 11;
+const VERSION_CONSIGNES = 12;
 
 // Ce que Claude peut faire seul, dans sa copie. Tout le reste est refusé sans lui demander.
 const AUTORISE = [
@@ -384,9 +387,11 @@ async function deployerVraiment(p, verifierApres, messageCommit, reponse) {
     const pu = await pousserVraiment(p);
     if (pu.erreur) return pu;
     const cg = lireConv(p.id); cg.demandeProd = null; cg.questionProd = null; cg.fichiersADeployer = [];
+    cg.attenteEnLigne = { sha: (await git(p.dossier, ['rev-parse', 'HEAD'])).out, depuis: new Date().toISOString() };
     systeme(cg, 'Envoyé sur GitHub : la mise en ligne est faite par GitHub Actions (vérification, envoi, contrôle du site).'); ecrireConv(p.id, cg);
     S.journal(p.nom, 'envoyé sur GitHub, mise en ligne par GitHub Actions');
-    return { ok: true, message: avant + 'Envoyé sur GitHub. GitHub Actions vérifie le code, met en ligne les fichiers changés et contrôle le site (2 à 3 minutes). Vérifie ensuite toi-même le site avec curl.' };
+    if (suivreMiseEnLigne) suivreMiseEnLigne(p);
+    return { ok: true, message: avant + 'Envoyé sur GitHub. GitHub Actions vérifie le code, met en ligne les fichiers changés et contrôle le site (2 à 3 minutes) ; Zylot affichera « En ligne » dans la conversation dès que la nouvelle version sera sur le site. Tu peux vérifier toi-même avec curl.' };
   }
   const nc = await git(p.dossier, ['status', '--porcelain']);
   const n = nc.out ? nc.out.split('\n').length : 0;
@@ -419,7 +424,7 @@ async function deployerVraiment(p, verifierApres, messageCommit, reponse) {
     (envoyes ? ` Fichiers envoyés : ${envoyes.join(', ')}.` : (n ? ` Attention : ${n} fichier${n > 1 ? 's' : ''} non commité${n > 1 ? 's' : ''} du dossier sont partis avec.` : '')) +
     `\n\nFin de la sortie de « ${p.deploy} » :\n${fin}` + (verif ? '\n\nVérification après mise en ligne :\n' + verif : '');
   const cc = lireConv(p.id); cc.demandeProd = null; cc.questionProd = null;
-  if (ok) cc.fichiersADeployer = [];
+  if (ok) { cc.fichiersADeployer = []; S.noterDeploiement(p.id, { sha: (await git(p.dossier, ['rev-parse', 'HEAD'])).out, via: 'script ' + p.deploy, fichiers: envoyes || null }); }
   systeme(cc, ok ? 'Mis en ligne.' + (verif ? ' ' + verif.replace(/\n/g, ' ') : '') : `La mise en ligne a échoué (code ${r.code}) :\n${fin.split('\n').slice(-8).join('\n')}`);
   ecrireConv(p.id, cc);
   return { ok, message };
@@ -510,6 +515,18 @@ async function pousserVraiment(p) {
     : { erreur: `GitHub a refusé l'envoi :\n${sortie}\n(Souvent : GitHub a des commits que ce Mac n'a pas. Ne force jamais : explique au propriétaire.)` };
 }
 
+// Appelé quand la surveillance voit une nouvelle version en ligne.
+async function noterMiseEnLigne(p, version) {
+  const msg = (await git(p.dossier, ['log', '-1', '--format=%s', version.sha])).out;
+  const c = lireConv(p.id);
+  if (!c.messages.length) return;
+  systeme(c, `En ligne : version ${version.sha.slice(0, 7)}${msg ? ' « ' + msg + ' »' : ''}, arrivée sur le site à ${new Date(version.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}.`);
+  c.attenteEnLigne = null;
+  ecrireConv(p.id, c);
+}
+
 function annulerProd(id) { const c = lireConv(id); if (c.demandeProd || c.questionProd) { c.demandeProd = null; c.questionProd = null; systeme(c, 'Mise en ligne annulée.'); ecrireConv(id, c); } return { ok: true }; }
 
-module.exports = { enregistrerImage, cheminImage, etat, envoyer, garder, deployer, pousser, commiter, jeter, nouvelle, arreter, jetonValide, annulerProd, enCours };
+function signaler(id, texte) { const c = lireConv(id); c.attenteEnLigne = null; systeme(c, texte); ecrireConv(id, c); }
+
+module.exports = { signaler, surMiseEnLigneSuivie, noterMiseEnLigne, enregistrerImage, cheminImage, etat, envoyer, garder, deployer, pousser, commiter, jeter, nouvelle, arreter, jetonValide, annulerProd, enCours };

@@ -108,7 +108,21 @@ function verrou() {
 function poserVerrou(etat) { ecrire(F_VERROU, { pid: process.pid, ...etat }); }
 function leverVerrou() { fs.rmSync(F_VERROU, { force: true }); }
 
+// --- Mises en ligne (historique par projet) ---
+const DEPLOIEMENTS = path.join(DONNEES, 'deploiements');
+fs.mkdirSync(DEPLOIEMENTS, { recursive: true });
+function noterDeploiement(id, rec) {
+  fs.appendFileSync(path.join(DEPLOIEMENTS, id + '.jsonl'), JSON.stringify({ quand: new Date().toISOString(), ...rec }) + '\n');
+}
+function deploiements(id, n = 30) {
+  try {
+    return fs.readFileSync(path.join(DEPLOIEMENTS, id + '.jsonl'), 'utf8').trim().split('\n').filter(Boolean)
+      .map(l => JSON.parse(l)).slice(-n).reverse();
+  } catch { return []; }
+}
+
 module.exports = {
+  noterDeploiement, deploiements,
   RACINE, DONNEES, lire, ecrire, aujourdhui, config, projets, journal, lireJournal, enregistrerRapport, dernierRapport,
   ajouterAlertes, alertesOuvertes, marquerVu, verrou, poserVerrou, leverVerrou,
 };

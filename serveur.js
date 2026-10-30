@@ -17,11 +17,28 @@ const { port } = S.config();
 const HOTES = new Set([`zylot.localhost:${port}`, `localhost:${port}`, `127.0.0.1:${port}`, 'zylot.localhost', 'localhost', '127.0.0.1']);
 
 // --- Tâches de fond ---
+const hooksSurveillance = { surMiseEnLigne: (p, v) => conversation.noterMiseEnLigne(p, v).catch(() => {}) };
+
+// Après un envoi sur GitHub : on regarde le site toutes les 20 s, jusqu'à voir la nouvelle version (8 min au plus).
+conversation.surMiseEnLigneSuivie(p => {
+  const debut = Date.now();
+  const tic = async () => {
+    await surveillance.tour(prevenir, hooksSurveillance, p.id).catch(() => {});
+    const c = conversation.etat(p.id);
+    if (!c.attenteEnLigne) return;                          // arrivée : noterMiseEnLigne a fait le message
+    if (Date.now() - debut > 8 * 60e3) {
+      conversation.signaler(p.id, 'Pas encore en ligne après 8 minutes. Regardez l\'onglet Actions du dépôt sur GitHub : la vérification ou l\'envoi a peut-être échoué.');
+      return;
+    }
+    setTimeout(tic, 20e3);
+  };
+  setTimeout(tic, 30e3);
+});
 let surveillanceEnCours = false, securiteEnCours = false;
 async function surveiller() {
   if (surveillanceEnCours) return;
   surveillanceEnCours = true;
-  try { await surveillance.tour(prevenir); } catch (e) { console.error('surveillance', e); }
+  try { await surveillance.tour(prevenir, hooksSurveillance); } catch (e) { console.error('surveillance', e); }
   surveillanceEnCours = false;
 }
 async function controlerSecurite(forcer = false) {
@@ -63,7 +80,7 @@ async function etat() {
   const alertes = S.alertesOuvertes();
   const secu = securite.derniers();
   const dep = await etatDepots();
-  const projets = S.projets().map(p => {
+  const projets = await Promise.all(S.projets().map(async p => {
     const r = S.dernierRapport(p.id);
     const surv = p.site ? surveillance.resume(p.id) : null;
     const controle = secu[p.id] || null;
@@ -74,6 +91,11 @@ async function etat() {
       depot: dep[p.id] || null,
       surveillance: surv,
       securite: controle,
+      version: surv && surv.etat ? surv.etat.version || null : null,
+      aMettreEnLigne: await aMettreEnLigne(p, surv && surv.etat && surv.etat.version),
+      conversation: (({ enCours, prodEnCours, modif, demandeProd, questionProd, attenteEnLigne, messages }) => ({
+        enCours, prodEnCours, modif: !!modif, demande: !!(demandeProd || questionProd), attenteEnLigne: !!attenteEnLigne,
+        dernier: messages.length ? messages[messages.length - 1].quand : null })) (conversation.etat(p.id)),
       notation: (controle || ouvertes.length) ? securite.note(controle, surv && surv.etat && surv.etat.cert, ouvertes) : null,
       dernier: r && {
         quand: r.quand, duree: r.duree, erreur: r.erreur || null, etat: r.etat || null,
@@ -81,7 +103,7 @@ async function etat() {
         propositions: r.propositions || [],
       },
     };
-  });
+  }));
   return { projets, alertes, journal: S.lireJournal(40), enCours: S.verrou(), securiteEnCours, maintenant: new Date().toISOString() };
 }
 
@@ -111,13 +133,45 @@ async function suggestionsProjet(p) {
   return l.sort((a, b) => ordre[a.gravite] - ordre[b.gravite]);
 }
 
+// Combien de commits du projet ne sont pas encore sur le site (si on connaît la version en ligne).
+async function aMettreEnLigne(p, version) {
+  if (!version || !fs.existsSync(p.dossier)) return null;
+  return new Promise(res => require('child_process').execFile('git', ['-C', p.dossier, 'rev-list', '--count', version.sha + '..HEAD'], { timeout: 5000 },
+    (e, out) => res(e ? null : Number(out.trim()))));
+}
+
+// Le détail d'un projet pour sa page : circuit Mac → GitHub → site, derniers commits, historique des mises en ligne.
+async function detailProjet(p) {
+  const g = args => new Promise(res => require('child_process').execFile('git', ['-C', p.dossier, ...args], { timeout: 8000, maxBuffer: 4e6 }, (e, out) => res(e ? null : out.trim())));
+  const version = p.site ? (surveillance.resume(p.id).etat || {}).version || null : null;
+  const head = await g(['rev-parse', 'HEAD']);
+  const amont = await g(['rev-parse', '@{u}']);
+  const nonCommites = ((await g(['status', '--porcelain'])) || '').split('\n').filter(Boolean).length;
+  const log = ((await g(['log', '-15', '--format=%H%x1f%cI%x1f%s'])) || '').split('\n').filter(Boolean).map(l => { const [sha, quand, message] = l.split('\x1f'); return { sha, quand, message }; });
+  const ancetre = async (a, b) => !!(a && b) && (await g(['merge-base', '--is-ancestor', a, b])) !== null;
+  for (const c of log) {
+    c.surGitHub = await ancetre(c.sha, amont);
+    c.enLigne = version ? await ancetre(c.sha, version.sha) : null;
+  }
+  const deps = S.deploiements(p.id, 30);
+  for (const d of deps) if (d.sha && !d.message) d.message = await g(['log', '-1', '--format=%s', d.sha]);
+  return {
+    mode: p.ci === 'github' ? 'github' : p.deploy ? 'script' : 'aucun', commande: p.deploy || null,
+    circuit: { head, amont, nonCommites, version, nonPousses: head && amont ? Number(await g(['rev-list', '--count', amont + '..' + head]) || 0) : null },
+    commits: log, deploiements: deps,
+  };
+}
+
 // Ce que Zylot sait d'un projet, en quelques lignes, pour Claude.
 async function contexteProjet(p) {
   const surv = p.site ? surveillance.resume(p.id) : null, e = surv && surv.etat;
   const c = securite.derniers()[p.id];
   const d = (await depots.tous([p]))[p.id] || {};
   const l = [];
-  l.push(`- Dossier du projet : ${p.dossier}${p.deploy ? ` · mise en prod : ${p.deploy}` : ' · pas de commande de mise en prod configurée'}`);
+  const modeProd = p.ci === 'github' ? 'mise en prod par GitHub Actions à chaque push sur main (« zylot deployer » garde, pousse, et GitHub met en ligne)'
+    : p.deploy ? `mise en prod : ${p.deploy}` : 'pas de commande de mise en prod configurée';
+  l.push(`- Dossier du projet : ${p.dossier} · ${modeProd}`);
+  if (e && e.version) l.push(`- Version en ligne : commit ${e.version.sha.slice(0, 7)}, mise en ligne le ${e.version.date}`);
   if (p.site) l.push(`- Site ${p.site} : ${e ? (e.ok ? `en ligne (${e.ms} ms)` : 'HORS LIGNE : ' + (e.erreur || 'code ' + e.code)) : 'pas encore testé'}${e && e.cert ? `, certificat valable ${e.cert.jours} jours` : ''}`);
   if (c) l.push(`- Contrôle de sécurité (${c.quand.slice(0, 10)}) : ${c.points.length ? c.points.map(x => x.titre).join(' ; ') : 'rien à signaler'}`);
   if (d.git) l.push(`- Git : dernier commit ${d.dernierCommit ? d.dernierCommit.quand.slice(0, 10) + ' « ' + d.dernierCommit.message + ' »' : 'aucun'}, ${d.nonCommites} fichier(s) non commité(s) dans le dossier, ${d.nonPousses == null ? 'pas de suivi GitHub' : d.nonPousses + ' commit(s) non poussé(s)'}`);
@@ -130,7 +184,7 @@ async function contexteProjet(p) {
 // Après une mise en ligne : le site répond-il, et les contrôles de sécurité sont-ils meilleurs ?
 async function verifierApresMiseEnLigne(p) {
   if (!p.site) return '';
-  await surveillance.tour(prevenir);
+  await surveillance.tour(prevenir, hooksSurveillance, p.id);
   const e = surveillance.resume(p.id).etat;
   const c = await securite.unProjet(p);
   return `${e && e.ok ? `Le site répond (${e.ms} ms).` : 'ATTENTION : le site ne répond pas (' + ((e && (e.erreur || 'code ' + e.code)) || '?') + ').'}` +
@@ -175,6 +229,11 @@ async function traiter(req, res) {
     return fs.createReadStream(path.join(S.RACINE, 'interface', 'index.html')).pipe(res);
   }
   if (req.method === 'GET' && url.pathname === '/api/etat') return json(res, 200, await etat());
+  const md = url.pathname.match(/^\/api\/projet\/([a-z0-9-]+)$/);
+  if (md && req.method === 'GET') {
+    const p = S.projets().find(x => x.id === md[1]);
+    return p ? json(res, 200, await detailProjet(p)) : json(res, 404, { erreur: 'Projet inconnu' });
+  }
   const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter|nouvelle|deployer|annulerprod|repondreprod|image))?$/);
   const projetConv = mc && S.projets().find(p => p.id === mc[1]);
   if (mc && !projetConv) return json(res, 404, { erreur: 'Projet inconnu' });
