@@ -51,7 +51,7 @@ async function controler(p) {
   // HTTPS : le site en http renvoie-t-il bien vers https ?
   const http = await obtenir('http://' + hote + '/', { redirect: 'manual' });
   res.redirigeHttps = !!(http.location && http.location.startsWith('https://'));
-  if (!http.erreur && !res.redirigeHttps) ajout('securite', 'Pas de redirection vers HTTPS', `http://${hote} ne renvoie pas vers https://. Un visiteur peut rester en clair.`, 15);
+  if (!http.erreur && !res.redirigeHttps) ajout('securite', 'HTTPS en place, mais http:// ne redirige pas', `Le site marche bien en https://, mais quelqu'un qui tape http://${hote} (ou suit un vieux lien) reste sur la version non chiffrée : le serveur ne le renvoie pas vers https://. Les navigateurs récents corrigent souvent d'eux-mêmes, d'où l'impression que tout va bien. Trois lignes dans le .htaccess.`, 15);
 
   // En-têtes de la page d'accueil
   const accueil = await obtenir(base + '/');
