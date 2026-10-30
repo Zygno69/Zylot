@@ -151,6 +151,27 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
 .note-intro{background:var(--run-bg);color:var(--ink);border-radius:10px;padding:14px 16px;font-size:13.5px}
 .note-intro b{color:var(--run)}
 
+.conv{display:flex;flex-direction:column;gap:10px}
+.bulle{max-width:92%;padding:10px 12px;border-radius:12px;font-size:13.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+.bulle.vous{align-self:flex-end;background:var(--accent);color:var(--accent-ink);border-bottom-right-radius:4px}
+.bulle.claude{align-self:flex-start;background:var(--soft);border-bottom-left-radius:4px}
+.bulle.systeme{align-self:center;background:none;color:var(--muted);font-size:12px;text-align:center;padding:2px 8px}
+.bulle .mode{font-size:11px;opacity:.8;display:block;margin-bottom:3px;font-weight:600}
+.bulle code{font-family:var(--f-mono);font-size:12px;background:var(--panel);padding:0 4px;border-radius:4px}
+.activites{list-style:none;margin:6px 0 0;padding:0;font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+.activites li::before{content:"› "}
+.bulle .erreur{color:var(--crit)}
+.bulle .cout{display:block;margin-top:6px;font-size:11px;color:var(--muted)}
+.attente{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px}
+.attente i{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite alternate}
+@keyframes pulse{from{opacity:.25}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.attente i{animation:none}}
+.saisie{display:flex;flex-direction:column;gap:8px;position:sticky;bottom:-22px;background:var(--panel);padding:10px 0 4px}
+.saisie textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-height:64px;resize:vertical;width:100%}
+.modif{border:1px solid var(--accent);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--run-bg)}
+.modif ul{margin:0;padding-left:18px;font-family:var(--f-mono);font-size:12px}
+.modif details pre{max-height:340px;overflow:auto}
+.diff-add{color:var(--ok)} .diff-del{color:var(--crit)} .diff-hunk{color:var(--muted)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:500;z-index:30;max-width:calc(100% - 32px)}
 </style>
 </head>
@@ -428,7 +449,7 @@ function rendrePropositions(P){
 
 // ---------- Détail d'un projet ----------
 function ouvrir(html){ $('#drawer').innerHTML='<button type="button" class="close" data-fermer>Fermer ✕</button>'+html; $('#scrim').hidden=false; $('#drawer .close').focus(); }
-function fermer(){ $('#scrim').hidden=true; }
+function fermer(){ $('#scrim').hidden=true; projetOuvert=null; convVue=''; clearTimeout(convTimer); }
 
 function ouvrirProjet(id){
   const p = D.projets.find(x=>x.id===id); if(!p) return;
@@ -436,7 +457,7 @@ function ouvrirProjet(id){
   ouvrir(`
     <div class="row"><span class="dot d-${voyant(p)}"></span><span class="label">${p.notation?'sécurité '+p.notation.lettre+' · ':''}${p.site?esc(p.site):'pas de site suivi'}</span></div>
     <h2 id="dTitle">${esc(p.nom)}</h2>
-    ${l.length ? `<h4>À regarder</h4><div class="liste">${l.map(x=>`<div style="border-left-color:var(--${x.g==='urgent'?'crit':x.g==='securite'?'warn':'line'})"><b>${esc(x.t)}</b> <span class="pill p-${x.g}">${GRAV[x.g]}</span><br><span style="font-size:13px">${esc(x.d)}</span>${x.alerte?`<br><button type="button" class="btn small" data-vu="${esc(x.alerte)}" style="margin-top:6px">Vu, je m'en occupe</button>`:''}</div>`).join('')}</div>` : '<p class="t-vert">Rien à signaler sur ce projet.</p>'}
+    ${l.length ? `<h4>À regarder</h4><div class="liste">${l.map((x,i)=>`<div style="border-left-color:var(--${x.g==='urgent'?'crit':x.g==='securite'?'warn':'line'})"><b>${esc(x.t)}</b> <span class="pill p-${x.g}">${GRAV[x.g]}</span><br><span style="font-size:13px">${esc(x.d)}</span><div class="row" style="margin-top:6px;gap:6px"><button type="button" class="btn small" data-demander="${i}">Demander à Claude</button>${x.alerte?`<button type="button" class="btn small" data-vu="${esc(x.alerte)}">Vu, je m'en occupe</button>`:''}</div></div>`).join('')}</div>` : '<p class="t-vert">Rien à signaler sur ce projet.</p>'}
     <h4>Site</h4>
     <dl class="kv">${p.site ? `
       <dt>État</dt><dd>${e?(e.ok?`en ligne · ${e.ms} ms`:`<span class="t-rouge">${esc(e.erreur||'code '+e.code)}</span>`):'premier test en attente'}</dd>
@@ -451,10 +472,60 @@ function ouvrirProjet(id){
       <dt>GitHub</dt><dd>${dep.github?`<a href="${esc(dep.github)}" target="_blank" rel="noopener">${esc(dep.github.replace('https://github.com/',''))}</a>`:'pas relié'}${dep.nonPousses>0?` · <span class="t-orange">${dep.nonPousses} commit${dep.nonPousses>1?'s':''} à pousser</span>`:dep.nonPousses===0?' · à jour':''}</dd>` : '<dt>Git</dt><dd>pas de dépôt</dd>'}
     </dl>
     ${p.dernier && !p.dernier.erreur ? `<h4>Dernier audit Claude · ${quand(p.dernier.quand)}</h4><p>${esc(p.dernier.resume)}</p>` : ''}
-    <div class="actions">
-      ${p.site?`<a class="btn" href="${esc(p.site)}" target="_blank" rel="noopener" style="text-decoration:none">Ouvrir le site</a>`:''}
-      <button type="button" class="btn" data-auditer="${esc(p.id)}" ${D.enCours?'disabled':''}>Faire lire le code par Claude</button>
+    <div class="row">
+      ${p.site?`<a class="btn small" href="${esc(p.site)}" target="_blank" rel="noopener" style="text-decoration:none">Ouvrir le site</a>`:''}
+      <button type="button" class="btn small" data-auditer="${esc(p.id)}" ${D.enCours?'disabled':''}>Audit complet du code</button>
+    </div>
+    <h4>Parler à Claude</h4>
+    <div class="conv" id="conv"><p class="muted" style="margin:0;font-size:13px">Chargement…</p></div>
+    <div class="saisie">
+      <textarea id="convTexte" placeholder="Demandez quelque chose à Claude sur ${esc(p.nom)}…"></textarea>
+      <div class="row" style="justify-content:space-between">
+        <span class="muted" style="font-size:12px">« Envoyer » : il lit et propose, sans rien toucher. « Vas-y » : il modifie sa copie.</span>
+        <span class="row" style="gap:6px"><button type="button" class="btn small" data-conv="discussion">Envoyer</button><button type="button" class="btn small primary" data-conv="travail">Vas-y, fais-le</button></span>
+      </div>
     </div>`);
+  projetOuvert = p.id; pointsOuverts = l; chargerConv();
+}
+
+// ---------- Conversation avec Claude ----------
+let projetOuvert = null, pointsOuverts = [], convTimer = null, convVue = '';
+function texteClaude(t){ return esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`([^`\n]+)`/g,'<code>$1</code>'); }
+function diffColore(d){ return d.split('\n').map(l=>{ const e=esc(l); return l.startsWith('+')&&!l.startsWith('+++')?`<span class="diff-add">${e}</span>`:l.startsWith('-')&&!l.startsWith('---')?`<span class="diff-del">${e}</span>`:l.startsWith('@@')?`<span class="diff-hunk">${e}</span>`:e; }).join('\n'); }
+async function chargerConv(){
+  clearTimeout(convTimer);
+  if(!projetOuvert || $('#scrim').hidden) return;
+  let c; try{ c = await api('/api/conversation/'+projetOuvert); }catch{ return; }
+  const zone = $('#conv'); if(!zone) return;
+  const html = (c.messages.length ? c.messages.map(m=>{
+    if(m.role==='systeme') return `<div class="bulle systeme">${esc(m.texte)}</div>`;
+    if(m.role==='vous') return `<div class="bulle vous"><span class="mode">${m.mode==='travail'?'Vas-y':'Question'}</span>${esc(m.texte)}</div>`;
+    const dernier = m===c.messages.at(-1) && c.enCours;
+    const acts = m.activites||[];
+    return `<div class="bulle claude">${m.erreur?`<span class="erreur">${esc(m.erreur)}</span>`:m.texte?texteClaude(m.texte):''}
+      ${dernier?`<div class="attente"><i></i>${m.mode==='travail'?'Claude travaille…':'Claude lit le projet…'}</div>`:''}
+      ${acts.length?(dernier?`<ul class="activites">${acts.slice(-6).map(a=>`<li>${esc(a)}</li>`).join('')}</ul>`:`<details><summary class="muted" style="font-size:11.5px;cursor:pointer">${acts.length} action${acts.length>1?'s':''}</summary><ul class="activites">${acts.map(a=>`<li>${esc(a)}</li>`).join('')}</ul></details>`):''}
+      ${m.duree?`<span class="cout">${m.duree} s</span>`:''}</div>`;
+  }).join('') : '<p class="muted" style="margin:0;font-size:13px">Aucune conversation. Cliquez sur « Demander à Claude » sous un point, ou écrivez ci-dessous.</p>')
+  + (c.enCours ? '<div class="row"><button type="button" class="btn small" data-conv-arreter>Arrêter Claude</button></div>' : '')
+  + (c.modif && !c.enCours ? `<div class="modif">
+      <b>Modifications prêtes, pas encore dans votre projet</b>
+      <span style="font-size:12.5px">Branche ${esc(c.modif.branche)} · ${esc(c.modif.resume)}</span>
+      <ul>${c.modif.fichiers.map(f=>`<li>${esc(f.etat==='A'?'nouveau':f.etat==='D'?'supprimé':'modifié')} · ${esc(f.chemin)}</li>`).join('')}</ul>
+      <details><summary style="cursor:pointer;font-size:13px">Voir le détail des changements</summary><pre class="files">${diffColore(c.modif.diff)}</pre></details>
+      <div class="row"><button type="button" class="btn small primary" data-conv-garder>Garder</button><button type="button" class="btn small" data-conv-jeter>Jeter</button>
+      <span class="muted" style="font-size:12px">« Garder » l'ajoute à votre projet. Rien n'est mis en ligne.</span></div>
+    </div>` : '')
+  + (!c.modif && !c.enCours && c.atelier ? '<div class="row"><button type="button" class="btn small" data-conv-jeter>Clore la conversation</button></div>' : '');
+  if(html !== convVue){ const enBas = zone.parentElement.scrollHeight - zone.parentElement.scrollTop - zone.parentElement.clientHeight < 120; zone.innerHTML = html; convVue = html; if(enBas) zone.parentElement.scrollTop = zone.parentElement.scrollHeight; }
+  document.querySelectorAll('[data-conv]').forEach(b=>b.disabled = c.enCours);
+  if(c.enCours) convTimer = setTimeout(chargerConv, 1500);
+}
+async function deuxClics(b, libelle){
+  if(b.dataset.arme) return true;
+  b.dataset.arme='1'; const avant=b.textContent; b.textContent=libelle; b.classList.add('danger');
+  setTimeout(()=>{ if(b.isConnected){ delete b.dataset.arme; b.textContent=avant; b.classList.remove('danger'); } },4000);
+  return false;
 }
 
 function ouvrirAlerte(id){
@@ -492,6 +563,22 @@ document.addEventListener('click', async e=>{
   const b = e.target.closest('button, tr[data-projet]'); if(!b) return;
   if(b.dataset.fermer!==undefined) return fermer();
   if(b.dataset.vu){ try{ await api('/api/alertes/'+b.dataset.vu+'/vu',{}); fermer(); toast('Marquée comme vue'); charger(); }catch(err){ toast(err.message); } return; }
+  if(b.dataset.demander!==undefined){
+    const x = pointsOuverts[+b.dataset.demander]; const t = $('#convTexte');
+    t.value = `Point relevé par Zylot : ${x.t}\n${x.d}\n\nQu'est-ce que tu proposes de faire ?`;
+    t.focus(); t.scrollIntoView({block:'center'}); return;
+  }
+  if(b.dataset.conv){
+    const texte = $('#convTexte').value.trim();
+    if(!texte){ toast(b.dataset.conv==='travail' ? 'Écrivez « vas-y » ou précisez ce qu\'il doit faire' : 'Écrivez votre question'); $('#convTexte').focus(); return; }
+    try{ await api('/api/conversation/'+projetOuvert+'/message',{texte, mode:b.dataset.conv}); $('#convTexte').value=''; chargerConv(); }catch(err){ toast(err.message); }
+    return;
+  }
+  if(b.dataset.convArreter!==undefined){ await api('/api/conversation/'+projetOuvert+'/arreter',{}).catch(()=>{}); toast('Claude arrêté'); return; }
+  if(b.dataset.convGarder!==undefined){ if(!await deuxClics(b,'Confirmer : ajouter à mon projet')) return;
+    try{ const r = await api('/api/conversation/'+projetOuvert+'/garder',{}); toast('Gardé'); chargerConv(); charger(); }catch(err){ toast(err.message); } return; }
+  if(b.dataset.convJeter!==undefined){ if(!await deuxClics(b,'Confirmer')) return;
+    try{ await api('/api/conversation/'+projetOuvert+'/jeter',{}); chargerConv(); }catch(err){ toast(err.message); } return; }
   if(b.dataset.alerte) return ouvrirAlerte(b.dataset.alerte);
   if(b.dataset.rapport) return ouvrirRapport(b.dataset.rapport);
   if(b.dataset.auditer) return auditer(b.dataset.auditer, b);

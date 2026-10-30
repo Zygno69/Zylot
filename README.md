@@ -11,6 +11,7 @@ Il tourne sur le Mac (puis le Mac Mini), là où sont les dépôts et où Claude
   - **Vue d'ensemble** : un voyant par projet (site, certificat, code, note de sécurité, liens), la liste « À regarder », le journal.
   - **Surveillance** (sans Claude, toutes les 5 min) : site en ligne, temps de réponse, disponibilité sur 24 h / 7 j / 30 j, certificat, pannes. Alerte au deuxième échec de suite.
   - **Sécurité** (sans Claude, chaque jour) : fichiers sensibles exposés (`.git`, `.env`, sauvegardes SQL…), redirection HTTPS, en-têtes de protection, note de A à E ; plus l'audit du code par Claude.
+  - **Parler à Claude**, dans la fiche de chaque projet : « Envoyer » (il lit et propose), « Vas-y » (il modifie une copie à part du projet, un worktree sur une branche `zylot/…`), puis « Garder » (fusion sur la branche du projet) ou « Jeter ». Il ne peut ni déployer, ni pousser, ni toucher au dossier du projet.
   - **Propositions** : ce que Zylot remarque seul (projet endormi, travail pas sur GitHub, en-têtes à ajouter) et les propositions des audits Claude.
 - **Notifications** sur le Mac ; sur le téléphone avec [ntfy](https://ntfy.sh) si un sujet est mis dans `config.local.json`.
 

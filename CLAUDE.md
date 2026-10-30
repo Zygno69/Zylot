@@ -12,6 +12,8 @@ Outil personnel : piloter Claude Code sur tous les projets depuis une seule inte
 - Adresse : http://zylot.localhost:4000 (le port 80 demande les droits administrateur sur macOS).
 - Dans l'interface, la ligue s'appelle « Ligue hockey » (le sigle est proscrit sur ce projet).
 
+- Conversations (`coeur/conversation.js`) : worktree dans `donnees/ateliers/<projet>`, `node_modules`/`vendor` partagés par lien symbolique, session Claude reprise avec `--resume`. Droits : lecture en discussion, écriture + vérifications (lint, build, php -l) en travail ; jamais push ni déploiement. « Garder » = commit sur la branche puis `merge --ff-only`, sinon la branche reste à fusionner à la main.
+
 ## Pièges connus
 
 - L'agent hérite de l'environnement : `audit.js` retire toutes les variables `CLAUDE*` / `ANTHROPIC*`, sinon une session de l'appli de bureau lui passe sa propre connexion.

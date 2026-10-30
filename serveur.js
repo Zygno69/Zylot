@@ -9,6 +9,7 @@ const S = require('./coeur/stockage');
 const surveillance = require('./coeur/surveillance');
 const securite = require('./coeur/securite');
 const depots = require('./coeur/depots');
+const conversation = require('./coeur/conversation');
 const { prevenir } = require('./coeur/prevenir');
 
 const { port } = S.config();
@@ -101,6 +102,10 @@ http.createServer(async (req, res) => {
     return fs.createReadStream(path.join(S.RACINE, 'interface', 'index.html')).pipe(res);
   }
   if (req.method === 'GET' && url.pathname === '/api/etat') return json(res, 200, await etat());
+  const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter))?$/);
+  const projetConv = mc && S.projets().find(p => p.id === mc[1]);
+  if (mc && !projetConv) return json(res, 404, { erreur: 'Projet inconnu' });
+  if (mc && req.method === 'GET' && !mc[2]) return json(res, 200, conversation.etat(projetConv.id));
 
   if (req.method === 'POST') {
     // Un en-tête maison : un autre site ne peut pas l'envoyer sans autorisation CORS, que Zylot ne donne jamais.
@@ -121,6 +126,15 @@ http.createServer(async (req, res) => {
       lancerAudit(ids);
       return json(res, 202, { ok: true });
     }
+    if (mc && mc[2] === 'message') {
+      const { texte = '', mode = 'discussion' } = await corps(req);
+      if (!String(texte).trim()) return json(res, 400, { erreur: 'Message vide' });
+      const r = await conversation.envoyer(projetConv, String(texte).slice(0, 8000), mode === 'travail' ? 'travail' : 'discussion');
+      return json(res, r.erreur ? 409 : 202, r);
+    }
+    if (mc && mc[2] === 'garder') { const r = await conversation.garder(projetConv); return json(res, r.erreur ? 409 : 200, r); }
+    if (mc && mc[2] === 'jeter') { const r = await conversation.jeter(projetConv); return json(res, r.erreur ? 409 : 200, r); }
+    if (mc && mc[2] === 'arreter') return json(res, 200, conversation.arreter(projetConv.id));
     if (url.pathname === '/api/surveillance') { surveiller(); return json(res, 202, { ok: true }); }
     if (url.pathname === '/api/securite') {
       if (securiteEnCours) return json(res, 409, { erreur: 'Contrôles déjà en cours' });
