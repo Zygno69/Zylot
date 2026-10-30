@@ -265,8 +265,27 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
 .mini{display:inline-flex;align-items:flex-end;gap:1px;height:16px;vertical-align:middle;margin-left:6px}
 .mini i{width:3px;background:var(--accent);opacity:.6;border-radius:1px}
 .mini i.vide{background:var(--soft);opacity:1} .mini i.panne{background:var(--crit);opacity:1}
-.tuile .pied{display:flex;gap:6px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:9px;margin-top:2px}
+.tuile .pied{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;border-top:1px dashed var(--line);padding-top:9px;margin-top:2px}
+.tuile .pied .btn{text-align:center;padding:5px 6px}
 .grade.petit{width:26px;height:26px;font-size:15px;border-radius:7px}
+/* Logos */
+.logo{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--t,20px);height:var(--t,20px);border-radius:calc(var(--t,20px) / 4);background:var(--soft);overflow:hidden;position:relative}
+.logo img{width:100%;height:100%;object-fit:contain;background:#fff}
+.logo:not(:has(img))::after{content:attr(data-i);font-family:var(--f-display);font-weight:700;font-size:calc(var(--t,20px) * .42);color:var(--muted)}
+.avec-voyant{position:relative;display:inline-flex}
+.avec-voyant .dot{position:absolute;right:-3px;bottom:-3px;width:9px;height:9px;border:2px solid var(--panel)}
+/* Fil d'activité */
+.filtres{display:flex;gap:4px;flex-wrap:wrap}
+.filtres button{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:99px;padding:3px 11px;font-size:12.5px;font-weight:600}
+.filtres button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.jour{padding:10px 16px 4px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--bg);border-bottom:1px solid var(--line)}
+.evt{display:grid;grid-template-columns:48px 22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--line);font-size:13px}
+.evt .h{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.evt.prod{background:color-mix(in srgb, var(--ok-bg) 55%, transparent)}
+.evt.erreur .txt,.evt.urgent .txt{color:var(--crit)}
+.evt .txt b{font-weight:600}
+.evt .cat{font-size:11px;color:var(--muted)}
+.voir-plus{display:block;width:100%;border:0;background:none;color:var(--accent);padding:10px;font-weight:600}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:500;z-index:30;max-width:calc(100% - 32px)}
 </style>
 </head>
@@ -299,11 +318,18 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
       <div id="traiter"></div>
     </section>
     <div class="tuiles" id="tuiles"></div>
-    <div class="bas">
-      <section class="panel">
-        <div class="panel-h"><h2>Dernières mises en ligne</h2></div>
-        <ul class="histo" id="dernieres"></ul>
-      </section>
+    <section class="panel">
+      <div class="panel-h"><h2>Activité</h2>
+        <div class="filtres" id="filtres">
+          <button type="button" data-filtre="tout" aria-pressed="true">Tout</button>
+          <button type="button" data-filtre="prod" aria-pressed="false">Mises en ligne</button>
+          <button type="button" data-filtre="claude" aria-pressed="false">Claude</button>
+          <button type="button" data-filtre="veille" aria-pressed="false">Sécurité et sites</button>
+        </div>
+      </div>
+      <div id="activite"></div>
+    </section>
+  </section>
       <section class="panel">
         <div class="panel-h"><h2>Journal</h2></div>
         <ul class="log" id="log"></ul>
@@ -369,6 +395,9 @@ function age(iso){
   return `il y a ${Math.floor(j/30)} mois`;
 }
 const pl = (n, s, p) => n + ' ' + (n>1 ? (p||s+'s') : s);
+const initiales = nom => nom.split(/[\s'’-]+/).filter(Boolean).map(m=>m[0]).join('').slice(0,2).toUpperCase();
+// Le logo du site (servi par Zylot), ou ses initiales si le site n'en a pas.
+const logo = (p, t=20) => `<span class="logo" style="--t:${t}px" data-i="${esc(initiales(p.nom))}"><img src="/api/logo/${esc(p.id)}" alt="" loading="lazy" onerror="this.remove()"></span>`;
 async function api(chemin, corps){
   const r = await fetch(chemin, corps===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Zylot':'1'},body:JSON.stringify(corps)});
   const j = await r.json().catch(()=>({}));
@@ -471,37 +500,64 @@ function rendre(){
     const claude = c.enCours ? '<span style="color:var(--run)">travaille…</span>' : c.prodEnCours ? '<span style="color:var(--run)">met en ligne…</span>' : (c.modif||c.demande) ? '<span class="t-orange">attend votre décision</span>' : c.dernier ? `<span class="muted">dernier échange ${age(c.dernier)}</span>` : '<span class="muted">—</span>';
     const id = esc(p.id);
     return `<article class="tuile v-${v}">
-      <div class="haut"><span class="dot d-${v}"></span><button type="button" data-aller-volet="${id}|conv">${esc(p.nom)}</button>${n?`<span class="grade petit g-${n.lettre}" title="Sécurité ${n.score}/100">${n.lettre}</span>`:''}</div>
+      <div class="haut"><span class="avec-voyant">${logo(p, 30)}<span class="dot d-${v}"></span></span><button type="button" data-aller-volet="${id}|conv">${esc(p.nom)}</button>${n?`<span class="grade petit g-${n.lettre}" title="Sécurité ${n.score}/100">${n.lettre}</span>`:''}</div>
       <div class="ligne"><span>Site</span><span>${site}</span></div>
       <div class="ligne"><span>En prod</span><span>${prod}</span></div>
       <div class="ligne"><span>Code</span><span>${code}</span></div>
       <div class="ligne"><span>Claude</span><span>${claude}</span></div>
       <div class="pied">
-        <button type="button" class="btn small" data-aller-volet="${id}|conv">Conversation</button>
+        <button type="button" class="btn small" data-aller-volet="${id}|conv">Discuter</button>
         <button type="button" class="btn small" data-aller-volet="${id}|prod">Mise en ligne</button>
-        ${p.site?`<a class="btn small" href="${esc(p.site)}" target="_blank" rel="noopener" style="text-decoration:none">Site ↗</a>`:''}
+        ${p.site?`<a class="btn small" href="${esc(p.site)}" target="_blank" rel="noopener" style="text-decoration:none" title="Ouvrir le site">↗</a>`:'<span></span>'}
       </div>
     </article>`;
   }).join('');
 
-  // Dernières mises en ligne, tous sites
-  $('#dernieres').innerHTML = (D.miseEnLigne||[]).length ? D.miseEnLigne.map(d=>`<li><span class="muted">${quand(d.misEnLigne||d.quand)}</span><span class="mono">${esc((d.sha||'').slice(0,7))}</span><span><b>${esc(d.nom)}</b></span><span class="muted" style="font-size:12px">${esc(d.via||'')}</span></li>`).join('')
-    : '<li><span class="muted" style="grid-column:1/-1">Aucune mise en ligne enregistrée pour l\'instant. Elles apparaîtront ici, tous sites confondus.</span></li>';
-
-  // Journal, sans les doublons consécutifs
-  // Une même ligne revenue dans les 5 minutes (même parmi d'autres) est regroupée.
-  const jr = [];
-  for(const l of D.journal){
-    const k = l.projet+'|'+l.message, t = new Date(l.quand);
-    const deja = jr.slice(-4).find(x=>x.k===k && Math.abs(new Date(x.quand)-t) < 5*60e3);
-    if(deja){ deja.n++; continue; }
-    jr.push({...l, k, n:1});
-  }
-  $('#log').innerHTML = jr.length ? jr.slice(0,15).map(l=>`<li class="${esc(l.niveau)}"><span>${quand(l.quand)}</span><span><b>${esc(l.projet)}</b> · ${esc(l.message)}${l.n>1?` <span class="muted">(×${l.n})</span>`:''}</span></li>`).join('') : '<li><span></span><span class="muted">Rien pour l\'instant.</span></li>';
+  rendreActivite();
 
   rendreSurveillance(sites);
   rendreSecurite(P);
   rendrePropositions(P);
+}
+
+// ---------- Fil d'activité : mises en ligne + journal, classés par jour ----------
+let filtre = 'tout', activiteMax = 30;
+function categorie(m){
+  if(/mise en prod|mis en ligne|nouvelle version en ligne|envoyé sur GitHub|GitHub Actions/i.test(m)) return 'prod';
+  if(/Claude|conversation|travail en cours enregistré|modification/i.test(m)) return 'claude';
+  if(/clé|faille|exposé|sécurité|audit|contrôle|panne|répond|certificat|de nouveau en ligne/i.test(m)) return 'veille';
+  return 'autre';
+}
+function rendreActivite(){
+  const parNom = Object.fromEntries(D.projets.map(p=>[p.nom, p]));
+  const evts = [];
+  for(const d of (D.miseEnLigne||[])) evts.push({ quand: d.misEnLigne||d.quand, p: D.projets.find(x=>x.id===d.projet), cat:'prod', prod:true,
+    txt: `<span class="pill p-vert">en ligne</span> version <span class="mono">${esc((d.sha||'').slice(0,7))}</span>${d.message?' · '+esc(d.message):''}`, via: d.via });
+  // Le journal, sans les doublons rapprochés ni les lignes déjà représentées par une mise en ligne
+  const vus = [];
+  for(const l of D.journal){
+    if(/nouvelle version en ligne/.test(l.message)) continue;
+    const k = l.projet+'|'+l.message, t = new Date(l.quand);
+    const deja = vus.slice(-5).find(x=>x.k===k && Math.abs(new Date(x.quand)-t) < 5*60e3);
+    if(deja){ deja.n++; continue; }
+    const e = { k, n:1, quand:l.quand, p: parNom[l.projet], nom: l.projet, cat: categorie(l.message), niveau: l.niveau, message: l.message };
+    vus.push(e); evts.push(e);
+  }
+  evts.sort((a,b)=>String(b.quand).localeCompare(String(a.quand)));
+  const liste = evts.filter(e=>filtre==='tout' || e.cat===filtre);
+  const CAT = {prod:'mise en ligne', claude:'Claude', veille:'veille', autre:''};
+  let html = '', jourPrec = '';
+  for(const e of liste.slice(0, activiteMax)){
+    const d = new Date(e.quand), j = d.toDateString();
+    if(j !== jourPrec){ jourPrec = j; const auj = new Date().toDateString(), hier = new Date(Date.now()-864e5).toDateString();
+      html += `<div class="jour">${j===auj?'Aujourd\'hui':j===hier?'Hier':d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>`; }
+    const txt = e.prod ? e.txt : esc(e.message) + (e.n>1?` <span class="muted">(×${e.n})</span>`:'');
+    html += `<div class="evt ${e.prod?'prod':''} ${esc(e.niveau||'')}"><span class="h">${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span>
+      ${e.p ? logo(e.p, 22) : '<span class="logo" style="--t:22px" data-i="Z"></span>'}
+      <span class="txt"><b>${esc(e.p?.nom || e.nom)}</b> · ${txt}</span><span class="cat">${esc(e.via || CAT[e.cat] || '')}</span></div>`;
+  }
+  $('#activite').innerHTML = (html || '<p class="empty">Rien à afficher pour ce filtre.</p>') + (liste.length > activiteMax ? `<button type="button" class="voir-plus" data-plus>Voir plus (${liste.length - activiteMax})</button>` : '');
+  document.querySelectorAll('[data-filtre]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.filtre===filtre));
 }
 
 function rendreSurveillance(sites){
@@ -624,14 +680,14 @@ function signesNav(p){
 function rendreNav(){
   $('#navGlobal').setAttribute('aria-current', projetOuvert ? 'false' : 'page');
   $('#navSites').innerHTML = D.projets.map(p=>`<button type="button" data-aller="${esc(p.id)}" aria-current="${p.id===projetOuvert?'page':'false'}">
-    <span class="dot d-${voyant(p)}"></span><span class="nom">${esc(p.nom)}</span><span class="signes">${signesNav(p)}</span></button>`).join('');
+    <span class="avec-voyant">${logo(p, 22)}<span class="dot d-${voyant(p)}"></span></span><span class="nom">${esc(p.nom)}</span><span class="signes">${signesNav(p)}</span></button>`).join('');
 }
 
 function construirePage(p){
   $('#vue-projet').innerHTML = `
     <header class="ptete">
       <div class="row" style="justify-content:space-between">
-        <div class="row"><span class="dot d-${voyant(p)}" id="pDot"></span><h1>${esc(p.nom)}</h1>${p.site?`<a href="${esc(p.site)}" target="_blank" rel="noopener" class="muted" style="font-size:13px">${esc(p.site.replace(/^https?:\/\//,''))} ↗</a>`:''}</div>
+        <div class="row"><span class="avec-voyant">${logo(p, 34)}<span class="dot d-${voyant(p)}" id="pDot"></span></span><h1>${esc(p.nom)}</h1>${p.site?`<a href="${esc(p.site)}" target="_blank" rel="noopener" class="muted" style="font-size:13px">${esc(p.site.replace(/^https?:\/\//,''))} ↗</a>`:''}</div>
         <button type="button" class="btn small" data-aller="">Vue d'ensemble</button>
       </div>
       <div class="pills" id="pPills"></div>
@@ -891,6 +947,8 @@ document.addEventListener('click', async e=>{
   const b = e.target.closest('button, tr[data-projet]'); if(!b) return;
   if(b.dataset.fermer!==undefined) return fermer();
   if(b.dataset.vu){ try{ await api('/api/alertes/'+b.dataset.vu+'/vu',{}); fermer(); toast('Marquée comme vue'); charger(); }catch(err){ toast(err.message); } return; }
+  if(b.dataset.filtre){ filtre = b.dataset.filtre; activiteMax = 30; return rendreActivite(); }
+  if(b.dataset.plus!==undefined){ activiteMax += 40; return rendreActivite(); }
   if(b.dataset.aller!==undefined) return aller(b.dataset.aller);
   if(b.dataset.allerVolet){ const [id, v] = b.dataset.allerVolet.split('|'); return aller(id, v); }
   if(b.dataset.publier){ if(!await deuxClics(b,'Confirmer')) return;

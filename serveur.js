@@ -10,6 +10,7 @@ const surveillance = require('./coeur/surveillance');
 const securite = require('./coeur/securite');
 const depots = require('./coeur/depots');
 const conversation = require('./coeur/conversation');
+const logos = require('./coeur/logos');
 const { prevenir } = require('./coeur/prevenir');
 
 const { port } = S.config();
@@ -54,6 +55,8 @@ setInterval(surveiller, 5 * 60e3);
 setTimeout(() => controlerSecurite(), 20e3);
 setInterval(() => controlerSecurite(), 60 * 60e3);
 setInterval(() => S.projets().forEach(p => surveillance.elaguer(p.id)), 24 * 36e5);
+setTimeout(() => logos.tous(), 5e3);
+setInterval(() => logos.tous(), 24 * 36e5);
 
 // L'état des dépôts change peu : on le relit au plus toutes les 30 s.
 let cacheDepots = { quand: 0, valeur: {} };
@@ -233,6 +236,8 @@ async function traiter(req, res) {
     return fs.createReadStream(path.join(S.RACINE, 'interface', 'index.html')).pipe(res);
   }
   if (req.method === 'GET' && url.pathname === '/api/etat') return json(res, 200, await etat());
+  const ml = url.pathname.match(/^\/api\/logo\/([a-z0-9-]+)$/);
+  if (ml && req.method === 'GET') { if (!logos.servir(ml[1], res)) json(res, 404, { erreur: 'Pas de logo' }); return; }
   const md = url.pathname.match(/^\/api\/projet\/([a-z0-9-]+)$/);
   if (md && req.method === 'GET') {
     const p = S.projets().find(x => x.id === md[1]);

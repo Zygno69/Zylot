@@ -107,8 +107,10 @@ async function tour(prevenir, hooks = {}, seulement = null) {
     const version = await versionEnLigne(p.site);
     etats[p.id] = { ...v, echecs, enPanne: echecs >= 2, cert, certVerifie: cert === avant.cert ? avant.certVerifie : new Date().toISOString(), version: version || avant.version || null };
     if (version && (!avant.version || avant.version.sha !== version.sha)) {
-      S.noterDeploiement(p.id, { sha: version.sha, misEnLigne: version.date, via: 'CI GitHub', premiereLecture: !avant.version });
-      if (avant.version) {
+      // Première lecture d'une version déjà ancienne : c'est l'état trouvé, pas une mise en ligne. Une version récente, si.
+      const dejaLa = !avant.version && Date.now() - new Date(version.date) > 3600e3;
+      S.noterDeploiement(p.id, { sha: version.sha, misEnLigne: version.date, via: 'CI GitHub', premiereLecture: dejaLa });
+      if (!dejaLa) {
         S.journal(p.nom, `nouvelle version en ligne : ${version.sha.slice(0, 7)}`);
         prevenir && prevenir(`${p.nom} est en ligne`, `Version ${version.sha.slice(0, 7)} en production.`);
         hooks.surMiseEnLigne && hooks.surMiseEnLigne(p, version);
