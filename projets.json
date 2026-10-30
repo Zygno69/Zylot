@@ -3,7 +3,7 @@
   { "id": "ligue",      "nom": "Ligue hockey",  "dossier": "~/AURA",          "site": "https://aurahockey.fr" },
   { "id": "beausejour", "nom": "Beauséjour",    "dossier": "~/BEAUSEJOUR",    "site": "https://copro-beausejour.fr" },
   { "id": "cascol",     "nom": "Cascol coachs", "dossier": "~/COACH",         "site": "https://cascol-coachs.fr" },
-  { "id": "duo",        "nom": "Duo",           "dossier": "~/DUO",           "site": null },
+  { "id": "duo",        "nom": "Duo",           "dossier": "~/DUO",           "site": "https://duo-app.net" },
   { "id": "lmo",        "nom": "LMO",           "dossier": "~/LMO",           "site": "https://lmo-lyon.com" },
   { "id": "plan2",      "nom": "Plan2Sécurité", "dossier": "~/PLAN2SECURITE", "site": "https://www.plan2securite.fr" },
   { "id": "mir",        "nom": "Men In Red",    "dossier": "~/MIR/MIR",       "site": "https://men-in-red.fr" }
