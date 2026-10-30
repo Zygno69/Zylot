@@ -1,4 +1,4 @@
-# Poste de pilotage
+# Zylot
 
 Un tableau de bord pour faire travailler Claude Code sur plusieurs projets en parallèle, sans passer de l'un à l'autre : décisions à valider, alertes, file d'attente, quota de l'abonnement Max.
 
