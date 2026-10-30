@@ -1,6 +1,6 @@
 [
-  { "id": "alf",        "nom": "ALF Futsal",    "dossier": "~/ALF",           "site": "https://alf-futsal.fr" },
-  { "id": "ligue",      "nom": "Ligue hockey",  "dossier": "~/AURA",          "site": null, "note": "Le domaine ne pointe pas encore sur le nouveau site : audit du code seulement." },
+  { "id": "alf",        "nom": "ALF Futsal",    "dossier": "~/ALF",           "site": "https://connect.alf-futsal.fr", "note": "Le site vitrine alf-futsal.fr (sans www) a un certificat qui ne correspond pas : seul www.alf-futsal.fr marche." },
+  { "id": "ligue",      "nom": "Ligue hockey",  "dossier": "~/AURA",          "site": "https://aurahockey.fr" },
   { "id": "beausejour", "nom": "Beauséjour",    "dossier": "~/BEAUSEJOUR",    "site": "https://copro-beausejour.fr" },
   { "id": "cascol",     "nom": "Cascol coachs", "dossier": "~/COACH",         "site": "https://cascol-coachs.fr" },
   { "id": "duo",        "nom": "Duo",           "dossier": "~/DUO",           "site": null },
