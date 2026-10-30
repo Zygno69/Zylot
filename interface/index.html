@@ -561,15 +561,16 @@ async function chargerConv(choisirVolet){
   if(choisirVolet){ montrerVolet(c.messages.length ? 'conv' : 'fiche'); return; }
   const zone = $('#conv'), defile = $('#messages'); if(!zone) return;
   suggestionsOuvertes = c.suggestions || [];
+  const aParle = c.messages.some(m=>m.role==='vous');
   const html = (c.messages.length ? c.messages.map((m,i)=>{
     if(m.role==='systeme') return `<div class="msg systeme">${esc(m.texte)}</div>`;
     if(m.role==='vous') return `<div class="msg vous">${(m.images||[]).map(n=>`<a href="/api/conversation/${esc(projetOuvert)}/image/${esc(n)}" target="_blank"><img class="capture" src="/api/conversation/${esc(projetOuvert)}/image/${esc(n)}" alt="Capture jointe"></a>`).join('')}${esc(m.texte)}</div>`;
     if(m.role==='zylot') return `<div class="msg systeme">Zylot a transmis le compte rendu de la mise en ligne à Claude.</div>`;
     return `<div class="msg claude">${rendreBlocs(m, c.enCours && i===c.messages.length-1)}</div>`;
-  }).join('') : (c.suggestions?.length ? `<div class="suggestions"><b>Ce que je vous propose sur ce projet</b>${c.suggestions.slice(0,6).map((x,i)=>`
+  }).join('') : '') + (aParle ? '' : (c.suggestions?.length ? `<div class="suggestions"><b>Ce que je vous propose sur ce projet</b>${c.suggestions.slice(0,6).map((x,i)=>`
       <div class="sugg"><span class="pill p-${esc(x.gravite)}">${GRAV[x.gravite]}</span><div style="min-width:0"><b>${esc(x.titre)}</b><br><span class="muted" style="font-size:12.5px">${esc(x.detail)}</span></div><button type="button" class="btn small primary" data-sugg="${i}">Vas-y</button></div>`).join('')}
       <span class="muted" style="font-size:12.5px">Ou écrivez ce que vous voulez ci-dessous. « Fais-le » tout court : je prends la première.</span></div>`
-    : `<div class="msg systeme" style="margin-top:20px">Posez une question, demandez une correction ou une nouveauté.</div>`))
+    : (c.messages.length ? '' : `<div class="msg systeme" style="margin-top:20px">Posez une question, demandez une correction ou une nouveauté.</div>`)))
   + (c.enCours ? '<div class="row"><button type="button" class="btn small" data-conv-arreter>Arrêter</button></div>' : '')
   + (c.prodEnCours ? '<div class="modif"><div class="attente"><i></i>Mise en ligne en cours… ça peut prendre quelques minutes.</div></div>' : '')
   + (c.questionProd && !c.prodEnCours && !c.enCours ? `<div class="modif"><b>Le script de mise en ligne vous pose une question</b>
