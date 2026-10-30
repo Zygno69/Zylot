@@ -11,6 +11,7 @@ const securite = require('./coeur/securite');
 const depots = require('./coeur/depots');
 const conversation = require('./coeur/conversation');
 const logos = require('./coeur/logos');
+const usage = require('./coeur/usage');
 const { prevenir } = require('./coeur/prevenir');
 
 const { port } = S.config();
@@ -56,6 +57,8 @@ setTimeout(() => controlerSecurite(), 20e3);
 setInterval(() => controlerSecurite(), 60 * 60e3);
 setInterval(() => S.projets().forEach(p => surveillance.elaguer(p.id)), 24 * 36e5);
 setTimeout(() => logos.tous(), 5e3);
+setTimeout(() => usage.tous(), 15e3);
+setInterval(() => usage.tous(), 60 * 60e3);
 setInterval(() => logos.tous(), 24 * 36e5);
 
 // L'état des dépôts change peu : on le relit au plus toutes les 30 s.
@@ -95,6 +98,7 @@ async function etat() {
       surveillance: surv,
       securite: controle,
       version: surv && surv.etat ? surv.etat.version || null : null,
+      usage: (u => u && { releve: u.releve, erreur: u.erreur, principaux: u.indicateurs.filter(x => x.principal).slice(0, 3) })(p.stats ? usage.dernier(p.id) : null),
       modeProd: p.ci === 'github' ? 'github' : p.deploy ? 'script' : null,
       aMettreEnLigne: await aMettreEnLigne(p, surv && surv.etat && surv.etat.version),
       conversation: (({ enCours, prodEnCours, modif, demandeProd, questionProd, attenteEnLigne, messages }) => ({
@@ -166,6 +170,7 @@ async function detailProjet(p) {
     mode: p.ci === 'github' ? 'github' : p.deploy ? 'script' : 'aucun', commande: p.deploy || null,
     circuit: { head, amont, nonCommites, version, nonPousses: head && amont ? Number(await g(['rev-list', '--count', amont + '..' + head]) || 0) : null },
     commits: log, deploiements: deps,
+    usage: p.stats ? { ...(usage.dernier(p.id) || {}), historique: usage.historique(p.id) } : null,
   };
 }
 
@@ -316,6 +321,8 @@ async function traiter(req, res) {
     if (mc && mc[2] === 'jeter') { const r = await conversation.jeter(projetConv); return json(res, r.erreur ? 409 : 200, r); }
     if (mc && mc[2] === 'arreter') return json(res, 200, conversation.arreter(projetConv.id));
     if (url.pathname === '/api/surveillance') { surveiller(); return json(res, 202, { ok: true }); }
+    const mu = url.pathname.match(/^\/api\/usage\/([a-z0-9-]+)$/);
+    if (mu) { const p = S.projets().find(x => x.id === mu[1]); if (!p) return json(res, 404, { erreur: 'Projet inconnu' }); return json(res, 200, { ok: !!(await usage.relever(p)) }); }
     if (url.pathname === '/api/securite') {
       if (securiteEnCours) return json(res, 409, { erreur: 'Contrôles déjà en cours' });
       controlerSecurite(true); return json(res, 202, { ok: true });

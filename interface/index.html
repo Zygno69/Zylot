@@ -286,6 +286,13 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
 .evt .txt b{font-weight:600}
 .evt .cat{font-size:11px;color:var(--muted)}
 .voir-plus{display:block;width:100%;border:0;background:none;color:var(--accent);padding:10px;font-weight:600}
+.indic{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;max-width:980px}
+.ind{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.ind.principal{border-color:var(--accent)}
+.ind .lib{font-size:12.5px;color:var(--muted)}
+.ind b{font-family:var(--f-display);font-size:24px;line-height:1.1}
+.ind b small{font-size:13px;color:var(--muted);font-weight:500}
+.ind .evol{font-size:12.5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:500;z-index:30;max-width:calc(100% - 32px)}
 </style>
 </head>
@@ -474,6 +481,8 @@ function rendre(){
     if(!c.attenteEnLigne && aPub > 0 && p.modeProd) actions.push({o:2, s:'publier', t:`${pl(aPub,'commit')} prêt${aPub>1?'s':''} à mettre en ligne`, p:nom,
       b:`<button type="button" class="btn small primary" data-publier="${id}" ${c.enCours||c.prodEnCours?'disabled':''}>Mettre en ligne</button>${ouvrir('prod','Détail')}`});
     for(const x of aRegarder(p)) if(x.g!=='info') actions.push({o:0, s:x.g, t:x.t, p:nom, b:ouvrir('code','Voir')});
+    for(const x of (p.usage?.principaux||[])) if(x.precedent >= 5 && x.valeur != null && x.valeur < x.precedent * 0.6)
+      actions.push({o:2, s:'securite', t:`Usage en baisse : ${x.libelle.toLowerCase()} ${nb(x.precedent)} → ${nb(x.valeur)}`, p:nom, b:ouvrir('usage','Voir')});
     if(p.depot?.nonPousses > 0 && !(p.aMettreEnLigne > 0) && p.modeProd!=='github') actions.push({o:5, s:'info', t:`${pl(p.depot.nonPousses,'commit')} pas sur GitHub`, p:nom, b:ouvrir('prod','Voir')});
   }
   actions.sort((a,b)=>a.o-b.o);
@@ -499,6 +508,7 @@ function rendre(){
       <div class="ligne"><span>En prod</span><span>${prod}</span></div>
       <div class="ligne"><span>Code</span><span>${code}</span></div>
       <div class="ligne"><span>Claude</span><span>${claude}</span></div>
+      ${p.usage?.principaux?.length ? `<div class="ligne"><span>Usage</span><span>${p.usage.principaux.slice(0,2).map(x=>`<b class="mono">${nb(x.valeur)}</b> ${esc(x.libelle.toLowerCase())} ${tendance(x)}`).join(' · ')}</span></div>` : ''}
       <div class="pied">
         <button type="button" class="btn small" data-aller-volet="${id}|conv">Discuter</button>
         <button type="button" class="btn small" data-aller-volet="${id}|prod">Mise en ligne</button>
@@ -686,7 +696,7 @@ function construirePage(p){
       </div>
       <div class="pills" id="pPills"></div>
       <nav class="tabs" role="tablist" style="border-bottom:0">
-        ${[['conv','Conversation'],['prod','Mise en ligne'],['surv','Surveillance'],['secu','Sécurité'],['code','Code et points à regarder']].map(([k,t])=>`<button type="button" class="tab" data-volet="${k}">${t}</button>`).join('')}
+        ${[['conv','Conversation'],['usage','Usage'],['prod','Mise en ligne'],['surv','Surveillance'],['secu','Sécurité'],['code','Code et points à regarder']].map(([k,t])=>`<button type="button" class="tab" data-volet="${k}">${t}</button>`).join('')}
       </nav>
     </header>
     <div class="pcorps">
@@ -702,6 +712,7 @@ function construirePage(p){
           </div>
         </div>
       </div>
+      <div class="ppane" id="v-usage" hidden></div>
       <div class="ppane" id="v-prod" hidden></div>
       <div class="ppane" id="v-surv" hidden></div>
       <div class="ppane" id="v-secu" hidden></div>
@@ -712,9 +723,9 @@ function construirePage(p){
 function montrerVolet(v){
   volet = v;
   document.querySelectorAll('[data-volet]').forEach(b=>b.setAttribute('aria-selected', b.dataset.volet===v));
-  for(const k of ['conv','prod','surv','secu','code']) { const z = $('#v-'+k); if(z) z.hidden = k!==v; }
+  for(const k of ['conv','usage','prod','surv','secu','code']) { const z = $('#v-'+k); if(z) z.hidden = k!==v; }
   if(v==='conv'){ convVue=''; chargerConv(); setTimeout(()=>$('#convTexte')?.focus(), 0); }
-  if(v==='prod') chargerDetail();
+  if(v==='prod' || v==='usage') chargerDetail();
   const p = D && D.projets.find(x=>x.id===projetOuvert); if(p) majPage(p);
 }
 
@@ -734,13 +745,45 @@ function majPage(p){
   if(volet==='secu') $('#v-secu').innerHTML = carteSecurite(p);
   if(volet==='code') $('#v-code').innerHTML = ficheProjet(p);
   if(volet==='prod') rendreProd(p);
+  if(volet==='usage') rendreUsage(p);
+}
+
+// ---------- Usage métier ----------
+function tendance(x){
+  if(x.valeur==null || x.precedent==null) return '';
+  if(x.precedent===0) return x.valeur>0 ? '<span class="t-vert">nouveau</span>' : '';
+  const pc = Math.round((x.valeur - x.precedent) / x.precedent * 100);
+  if(pc===0) return '<span class="muted">stable</span>';
+  return `<span class="${pc>0?'t-vert':'t-orange'}">${pc>0?'↑':'↓'} ${Math.abs(pc)} %</span>`;
+}
+const nb = v => v==null ? '–' : Number(v).toLocaleString('fr-FR');
+function rendreUsage(p){
+  const z = $('#v-usage'); if(!z) return;
+  if(!p.usage && !detail?.usage){ z.innerHTML = '<p class="empty">Les statistiques d\'usage ne sont pas encore branchées pour ce site.</p>'; return; }
+  if(!detail){ z.innerHTML = '<p class="empty">Chargement…</p>'; return; }
+  const u = detail.usage || {};
+  if(!u.indicateurs?.length){ z.innerHTML = `<p class="empty">${u.erreur ? 'Relevé impossible : '+esc(u.erreur) : 'Premier relevé en attente.'}</p>`; return; }
+  const groupes = {};
+  for(const x of u.indicateurs) (groupes[x.groupe||'Usage'] ||= []).push(x);
+  const hist = u.historique || [];
+  const sparkline = id => { const v = hist.map(h=>h.valeurs?.[id]).filter(n=>typeof n==='number'); if(v.length<2) return '';
+    const max = Math.max(...v,1); return `<span class="mini" title="Relevés quotidiens">${v.slice(-30).map(n=>`<i style="height:${Math.max(10,n/max*100)}%"></i>`).join('')}</span>`; };
+  const series = (u.series||[]).filter(s=>s.points?.length).map(s=>{ const max = Math.max(1,...s.points.map(p=>p[1]));
+    return `<section class="card"><div class="card-h"><h3>${esc(s.libelle)}</h3><span class="muted" style="font-size:12px">${s.points.length} jours</span></div>
+      <div class="barres" style="height:90px">${s.points.map(([j,n])=>`<i style="height:${Math.max(n?6:2,n/max*100)}%" title="${esc(j)} : ${n}"></i>`).join('')}</div>
+      <div class="axe"><span>${esc(s.points[0][0].slice(5).split('-').reverse().join('/'))}</span><span>max ${max}</span><span>${esc(s.points.at(-1)[0].slice(5).split('-').reverse().join('/'))}</span></div></section>`; }).join('');
+  z.innerHTML = `<p class="muted" style="margin:0">Relevé ${quand(u.releve)}${u.erreur?` · <span class="t-orange">dernier essai en échec : ${esc(u.erreur)}</span>`:''} · chiffres agrégés, aucune donnée personnelle · <button type="button" class="btn small" data-relever="${esc(p.id)}">Relever maintenant</button></p>
+    ${Object.entries(groupes).map(([g, xs])=>`<section><div class="label" style="margin-bottom:8px">${esc(g)}</div><div class="indic">${xs.map(x=>`
+      <div class="ind ${x.principal?'principal':''}" title="${esc(x.aide)}"><span class="lib">${esc(x.libelle)}</span><b>${nb(x.valeur)}${x.unite?` <small>${esc(x.unite)}</small>`:''}</b>
+        <span class="evol">${tendance(x)}${x.precedent!=null?` <span class="muted">avant : ${nb(x.precedent)}</span>`:''}${sparkline(x.id)}</span></div>`).join('')}</div></section>`).join('')}
+    ${series}`;
 }
 
 // ---------- Mise en ligne : circuit et historique ----------
 async function chargerDetail(){
   if(!projetOuvert) return;
   try{ detail = await api('/api/projet/'+projetOuvert); }catch{ return; }
-  const p = D.projets.find(x=>x.id===projetOuvert); if(p && volet==='prod') rendreProd(p);
+  const p = D.projets.find(x=>x.id===projetOuvert); if(p && volet==='prod') rendreProd(p); if(p && volet==='usage') rendreUsage(p);
 }
 function rendreProd(p){
   const z = $('#v-prod'); if(!z) return;
@@ -941,6 +984,7 @@ document.addEventListener('click', async e=>{
   const b = e.target.closest('button, tr[data-projet]'); if(!b) return;
   if(b.dataset.fermer!==undefined) return fermer();
   if(b.dataset.vu){ try{ await api('/api/alertes/'+b.dataset.vu+'/vu',{}); fermer(); toast('Marquée comme vue'); charger(); }catch(err){ toast(err.message); } return; }
+  if(b.dataset.relever){ b.disabled = true; try{ const r = await api('/api/usage/'+b.dataset.relever,{}); toast(r.ok?'Relevé fait':'Relevé impossible'); await charger(); chargerDetail(); }catch(err){ toast(err.message); } return; }
   if(b.dataset.filtre){ filtre = b.dataset.filtre; activiteMax = 30; return rendreActivite(); }
   if(b.dataset.plus!==undefined){ activiteMax += 40; return rendreActivite(); }
   if(b.dataset.aller!==undefined) return aller(b.dataset.aller);
@@ -987,7 +1031,7 @@ async function charger(){
     $('#lien').textContent = 'à jour à ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     $('#lien').classList.remove('off');
     rendre(); afficher();
-    if(projetOuvert && volet==='prod') chargerDetail();
+    if(projetOuvert && (volet==='prod' || volet==='usage')) chargerDetail();
   }catch{
     $('#lien').textContent = 'serveur injoignable : lancez « node serveur.js »';
     $('#lien').classList.add('off');

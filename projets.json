@@ -2,7 +2,7 @@
   { "id": "alf",        "nom": "ALF Futsal",    "dossier": "~/ALF",           "site": "https://connect.alf-futsal.fr", "note": "Le site vitrine alf-futsal.fr (sans www) a un certificat qui ne correspond pas : seul www.alf-futsal.fr marche.", "deploy": "./deploy/deploy.sh" },
   { "id": "ligue",      "nom": "Ligue hockey",  "dossier": "~/AURA",          "site": "https://aurahockey.fr", "deploy": "./deploy.sh {fichiers}" },
   { "id": "beausejour", "nom": "Beauséjour",    "dossier": "~/BEAUSEJOUR",    "site": "https://copro-beausejour.fr", "deploy": "./deploy.sh {fichiers}" },
-  { "id": "cascol",     "nom": "Cascol coachs", "dossier": "~/COACH",         "site": "https://cascol-coachs.fr", "deploy": "node deploy/deploy.js" },
+  { "id": "cascol",     "nom": "Cascol coachs", "dossier": "~/COACH",         "site": "https://cascol-coachs.fr", "deploy": "node deploy/deploy.js", "stats": "https://cascol-coachs.fr/api/zylot/stats" },
   { "id": "duo",        "nom": "Duo",           "dossier": "~/DUO",           "site": "https://duo-app.net", "deploy": "python3 deploy.py" },
   { "id": "lmo",        "nom": "LMO",           "dossier": "~/LMO",           "site": "https://inscription.lmo-lyon.com", "deploy": "./deploy.sh {fichiers}" },
   { "id": "plan2",      "nom": "Plan2Sécurité", "dossier": "~/PLAN2SECURITE", "site": "https://www.plan2securite.fr", "ci": "github" },
