@@ -72,11 +72,12 @@ function etat(id) { return { ...lireConv(id), enCours: enCours.has(id), prodEnCo
 // La copie de travail : créée au besoin, à partir du dernier commit du projet.
 async function preparerAtelier(p, c) {
   if (c.atelier && fs.existsSync(c.atelier.chemin)) {
-    // Copie sans modification en cours, et le propriétaire a commité depuis : on la remet à jour (avance rapide uniquement).
-    const propre = !(await git(c.atelier.chemin, ['status', '--porcelain', '--', '.', ':!node_modules', ':!vendor', ':!dist'])).out;
+    // Rien en attente dans la copie : on la recale sur le dernier commit du projet, même si l'historique a été réécrit
+    // entre-temps (avance rapide impossible). Claude ne commite jamais lui-même, donc rien ne se perd.
     const tete = (await git(p.dossier, ['rev-parse', 'HEAD'])).out;
-    if (propre && tete && (await git(c.atelier.chemin, ['merge', '--ff-only', tete])).ok) {
-      const cc = c; if (cc.appliqueJusqua) cc.appliqueJusqua = null;
+    if (tete && !(await lireModif(c.atelier))) {
+      await git(c.atelier.chemin, ['reset', '-q', '--hard', tete]);
+      c.appliqueJusqua = null;
     }
     return null;
   }
