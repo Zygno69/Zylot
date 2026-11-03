@@ -38,7 +38,7 @@ function nettoyer(d) {
     genere: texte(d.genere, 40) || new Date().toISOString(),
     indicateurs: (Array.isArray(d.indicateurs) ? d.indicateurs : []).slice(0, 40).map(x => ({
       id: texte(x.id, 60), libelle: texte(x.libelle), valeur: nombre(x.valeur), precedent: nombre(x.precedent),
-      principal: !!x.principal, aide: texte(x.aide, 300), unite: texte(x.unite, 20), groupe: texte(x.groupe, 60),
+      principal: !!x.principal, alerte: !!x.alerte, aide: texte(x.aide, 300), unite: texte(x.unite, 20), groupe: texte(x.groupe, 60),
     })).filter(x => x.id && x.libelle),
     series: (Array.isArray(d.series) ? d.series : []).slice(0, 6).map(s => ({
       id: texte(s.id, 60), libelle: texte(s.libelle),

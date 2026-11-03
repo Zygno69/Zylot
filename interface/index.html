@@ -291,6 +291,7 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
 .indic{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;max-width:980px}
 .ind{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
 .ind.principal{border-color:var(--accent)}
+.ind.alerte{border-color:var(--crit);background:var(--crit-bg)}
 .ind .lib{font-size:12.5px;color:var(--muted)}
 .ind b{font-family:var(--f-display);font-size:24px;line-height:1.1}
 .ind b small{font-size:13px;color:var(--muted);font-weight:500}
@@ -484,6 +485,7 @@ function rendre(){
     if(!c.attenteEnLigne && aPub > 0 && p.modeProd) actions.push({o:2, s:'publier', t:`${pl(aPub,'commit')} prêt${aPub>1?'s':''} à mettre en ligne`, p:nom,
       b:`<button type="button" class="btn small primary" data-publier="${id}" ${c.enCours||c.prodEnCours?'disabled':''}>Mettre en ligne</button>${ouvrir('prod','Détail')}`});
     for(const x of aRegarder(p)) if(x.g!=='info') actions.push({o:0, s:x.g, t:x.t, p:nom, b:ouvrir('code','Voir')});
+    for(const x of (p.usage?.alertes||[])) actions.push({o:0, s:'urgent', t:`${x.libelle} : ${x.valeur==null?'jamais':nb(x.valeur)+' '+(x.unite||'')}`, p:nom, b:ouvrir('usage','Voir')});
     for(const x of (p.usage?.principaux||[])) if(x.precedent >= 5 && x.valeur != null && x.valeur < x.precedent * 0.6)
       actions.push({o:2, s:'securite', t:`Usage en baisse : ${x.libelle.toLowerCase()} ${nb(x.precedent)} → ${nb(x.valeur)}`, p:nom, b:ouvrir('usage','Voir')});
     if(p.depot?.nonPousses > 0 && !(p.aMettreEnLigne > 0) && p.modeProd!=='github') actions.push({o:5, s:'info', t:`${pl(p.depot.nonPousses,'commit')} pas sur GitHub`, p:nom, b:ouvrir('prod','Voir')});
@@ -779,7 +781,7 @@ function rendreUsage(p){
       <div class="axe"><span>${esc(s.points[0][0].slice(5).split('-').reverse().join('/'))}</span><span>max ${max}</span><span>${esc(s.points.at(-1)[0].slice(5).split('-').reverse().join('/'))}</span></div></section>`; }).join('');
   z.innerHTML = `<p class="muted" style="margin:0">Relevé ${quand(u.releve)}${u.erreur?` · <span class="t-orange">dernier essai en échec : ${esc(u.erreur)}</span>`:''} · chiffres agrégés, aucune donnée personnelle · <button type="button" class="btn small" data-relever="${esc(p.id)}">Relever maintenant</button></p>
     ${Object.entries(groupes).map(([g, xs])=>`<section><div class="label" style="margin-bottom:8px">${esc(g)}</div><div class="indic">${xs.map(x=>`
-      <div class="ind ${x.principal?'principal':''}" title="${esc(x.aide)}"><span class="lib">${esc(x.libelle)}</span><b>${nb(x.valeur)}${x.unite?` <small>${esc(x.unite)}</small>`:''}</b>
+      <div class="ind ${x.principal?'principal':''} ${x.alerte?'alerte':''}" title="${esc(x.aide)}"><span class="lib">${esc(x.libelle)}</span><b>${nb(x.valeur)}${x.unite?` <small>${esc(x.unite)}</small>`:''}</b>
         <span class="evol">${tendance(x)}${x.precedent!=null?` <span class="muted">avant : ${nb(x.precedent)}</span>`:''}${sparkline(x.id)}</span></div>`).join('')}</div></section>`).join('')}
     ${series}`;
 }

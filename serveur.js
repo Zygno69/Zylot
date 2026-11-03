@@ -100,7 +100,7 @@ async function etat() {
       securite: controle,
       aCorriger: acorriger.ouverts(p.id).map(x => ({ titre: x.titre, gravite: x.gravite })),
       version: surv && surv.etat ? surv.etat.version || null : null,
-      usage: (u => u && { releve: u.releve, erreur: u.erreur, principaux: u.indicateurs.filter(x => x.principal).slice(0, 3) })(p.stats ? usage.dernier(p.id) : null),
+      usage: (u => u && { releve: u.releve, erreur: u.erreur, principaux: u.indicateurs.filter(x => x.principal).slice(0, 3), alertes: u.indicateurs.filter(x => x.alerte).map(x => ({ libelle: x.libelle, valeur: x.valeur, unite: x.unite, aide: x.aide })) })(p.stats ? usage.dernier(p.id) : null),
       modeProd: p.ci === 'github' ? 'github' : p.deploy ? 'script' : null,
       aMettreEnLigne: await aMettreEnLigne(p, surv && surv.etat && surv.etat.version),
       conversation: (({ enCours, prodEnCours, modif, demandeProd, questionProd, attenteEnLigne, messages }) => ({
