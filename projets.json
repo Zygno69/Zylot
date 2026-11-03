@@ -1,6 +1,6 @@
 [
   { "id": "alf",        "nom": "ALF Futsal",    "dossier": "~/ALF",           "site": "https://connect.alf-futsal.fr", "note": "Le site vitrine alf-futsal.fr (sans www) a un certificat qui ne correspond pas : seul www.alf-futsal.fr marche.", "deploy": "./deploy/deploy.sh", "stats": "https://connect.alf-futsal.fr/api/zylot/stats" },
-  { "id": "ligue",      "nom": "Ligue hockey",  "dossier": "~/AURA",          "site": "https://aurahockey.fr", "deploy": "./deploy.sh {fichiers}" },
+  { "id": "ligue",      "nom": "Ligue hockey",  "dossier": "~/AURA",          "site": "https://aurahockey.fr", "ci": "github" },
   { "id": "beausejour", "nom": "Beauséjour",    "dossier": "~/BEAUSEJOUR",    "site": "https://copro-beausejour.fr", "ci": "github", "stats": "https://copro-beausejour.fr/zylot-stats.php" },
   { "id": "cascol",     "nom": "Cascol coachs", "dossier": "~/COACH",         "site": "https://cascol-coachs.fr", "deploy": "node deploy/deploy.js", "stats": "https://cascol-coachs.fr/api/zylot/stats" },
   { "id": "duo",        "nom": "Duo",           "dossier": "~/DUO",           "site": "https://duo-app.net", "deploy": "python3 deploy.py", "stats": "https://gvxcgjlweoapbttiwnka.supabase.co/functions/v1/zylot-stats" },
