@@ -6,5 +6,5 @@
   { "id": "duo",        "nom": "Duo",           "dossier": "~/DUO",           "site": "https://duo-app.net", "deploy": "python3 deploy.py", "stats": "https://gvxcgjlweoapbttiwnka.supabase.co/functions/v1/zylot-stats" },
   { "id": "lmo",        "nom": "LMO",           "dossier": "~/LMO",           "site": "https://inscription.lmo-lyon.com", "ci": "github" },
   { "id": "plan2",      "nom": "Plan2Sécurité", "dossier": "~/PLAN2SECURITE", "site": "https://www.plan2securite.fr", "ci": "github" },
-  { "id": "mir",        "nom": "Men In Red",    "dossier": "~/MIR/MIR",       "site": "https://men-in-red.fr", "deploy": "npm run deploy", "stats": "https://men-in-red.fr/zylot-stats.php" }
+  { "id": "mir",        "nom": "Men In Red",    "dossier": "~/MIR/MIR",       "site": "https://men-in-red.fr", "ci": "github", "stats": "https://men-in-red.fr/zylot-stats.php" }
 ]
