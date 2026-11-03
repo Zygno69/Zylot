@@ -1,0 +1,132 @@
+# Vérifier et mettre en ligne __SITE__
+#
+# - Pull request : on vérifie seulement (syntaxe PHP).
+# - Push sur main : on vérifie, puis on envoie chez o2switch les fichiers changés par ce push,
+#   avec deploy.sh (FTPS, et son repli pour les gros fichiers), puis on vérifie que le site répond
+#   et sert bien ce commit (zylot-version.txt, lu aussi par Zylot).
+# - À la main (onglet Actions → « Run workflow ») : répétition à blanc, ou renvoi de tout le site.
+#
+# Identifiants : secrets du dépôt FTP_HOST, FTP_USER, FTP_PASSWORD (Settings → Secrets and variables → Actions).
+# Ils ne sont jamais écrits dans un fichier ni affichés.
+# Généré depuis le modèle de Zylot (modeles/mise-en-ligne-php.yml).
+
+name: Vérifier et mettre en ligne
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tout:
+        description: "Renvoyer tout le site (sinon : seulement les fichiers du dernier commit)"
+        type: boolean
+        default: false
+      essai:
+        description: "Répétition à blanc : lister ce qui partirait, sans rien envoyer"
+        type: boolean
+        default: true
+
+concurrency:
+  group: mise-en-ligne
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verifier:
+    name: Vérifier le code
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          tools: none
+      - name: Syntaxe PHP
+        run: |
+          erreurs=0
+          while IFS= read -r -d '' f; do
+            php -l "$f" > /dev/null || erreurs=1
+          done < <(git ls-files -z '*.php')
+          exit $erreurs
+
+  mettre-en-ligne:
+    name: Mettre en ligne
+    needs: verifier
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Choisir les fichiers à envoyer
+        id: liste
+        env:
+          AVANT: ${{ github.event.before }}
+          TOUT: ${{ inputs.tout }}
+        run: |
+          # Ce qui ne part jamais : les mêmes exclusions que deploy.sh.
+          garder() {
+            case "$1" in
+__EXCLUSIONS__
+            esac
+            return 0
+          }
+          if [ "$TOUT" = "true" ]; then
+            git ls-files > tous.txt
+          elif [ -n "$AVANT" ] && [ "$AVANT" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$AVANT" 2>/dev/null; then
+            git diff --name-only --diff-filter=ACMR "$AVANT" "$GITHUB_SHA" > tous.txt
+          else
+            git diff-tree --no-commit-id --name-only -r --diff-filter=ACMR HEAD > tous.txt
+          fi
+          : > fichiers.txt
+          while IFS= read -r f; do garder "$f" && echo "$f" >> fichiers.txt; done < tous.txt
+          echo "Fichiers à envoyer ($(grep -c . fichiers.txt || true)) :"; cat fichiers.txt
+          echo "nombre=$(grep -c . fichiers.txt || true)" >> "$GITHUB_OUTPUT"
+
+      - name: Envoyer chez o2switch
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          ESSAI: ${{ github.event_name == 'workflow_dispatch' && inputs.essai }}
+          NOMBRE: ${{ steps.liste.outputs.nombre }}
+        run: |
+          chmod +x deploy.sh
+          touch .env   # deploy.sh lit ce fichier ; les identifiants viennent de l'environnement
+          if [ "${NOMBRE:-0}" = "0" ]; then echo "Rien à envoyer : ce push ne touche aucun fichier du site."; exit 0; fi
+          if [ "$ESSAI" = "true" ]; then echo "Répétition à blanc, rien n'est envoyé."; exit 0; fi
+          if [ -z "$FTP_HOST" ] || [ -z "$FTP_USER" ] || [ -z "$FTP_PASSWORD" ]; then
+            echo "::error::Secrets FTP_HOST, FTP_USER ou FTP_PASSWORD manquants dans le dépôt."
+            exit 1
+          fi
+          xargs -d '\n' ./deploy.sh < fichiers.txt
+
+      - name: Noter la version en ligne
+        if: github.event_name == 'push' || inputs.essai == false
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          [ -n "$FTP_PASSWORD" ] || exit 0
+          printf '%s %s\n' "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > zylot-version.txt
+          ./deploy.sh zylot-version.txt
+
+      - name: Vérifier le site
+        if: github.event_name == 'push' || inputs.essai == false
+        env:
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          [ -n "$FTP_PASSWORD" ] || { echo "Pas encore de secrets FTP : rien n'a été mis en ligne."; exit 0; }
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' __SITE__/)
+            version=$(curl -s __SITE__/zylot-version.txt | cut -d' ' -f1)
+            if [ "$code" = "200" ] && [ "$version" = "$GITHUB_SHA" ]; then echo "Le site répond (200) et sert bien le commit $GITHUB_SHA."; exit 0; fi
+            sleep 10
+          done
+          echo "::error::Le site ne répond pas correctement (code $code, version en ligne : ${version:-inconnue})."
+          exit 1
