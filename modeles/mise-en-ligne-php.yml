@@ -125,7 +125,8 @@ __EXCLUSIONS__
           for i in 1 2 3; do
             code=$(curl -s -o /dev/null -w '%{http_code}' __SITE__/)
             version=$(curl -s __SITE__/zylot-version.txt | cut -d' ' -f1)
-            if [ "$code" = "200" ] && [ "$version" = "$GITHUB_SHA" ]; then echo "Le site répond (200) et sert bien le commit $GITHUB_SHA."; exit 0; fi
+            # Une redirection (vers la page de connexion par exemple) est normale : seuls les codes 400 et plus sont des erreurs.
+            if [ "${code:-0}" -ge 200 ] && [ "${code:-0}" -lt 400 ] && [ "$version" = "$GITHUB_SHA" ]; then echo "Le site répond ($code) et sert bien le commit $GITHUB_SHA."; exit 0; fi
             sleep 10
           done
           echo "::error::Le site ne répond pas correctement (code $code, version en ligne : ${version:-inconnue})."
