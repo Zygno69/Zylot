@@ -49,6 +49,9 @@ const AUTORISE = [
   'Bash(ls:*)', 'Bash(cat:*)', 'Bash(head:*)', 'Bash(tail:*)', 'Bash(wc:*)', 'Bash(grep:*)', 'Bash(sort:*)', 'Bash(uniq:*)',
   'Bash(curl -s:*)', 'Bash(curl -I:*)', 'Bash(curl -sI:*)', 'Bash(curl -sIL:*)', 'Bash(curl -s -I:*)',
   'Bash(php -l:*)', 'Bash(node --check:*)', 'Bash(npm run build:*)', 'Bash(npm run lint:*)', 'Bash(npm test:*)', 'Bash(npx eslint:*)',
+  // Dépendances : node_modules est un lien vers celui du vrai projet, donc une installation le met à jour aussi.
+  'Bash(npm install:*)', 'Bash(npm ci:*)', 'Bash(npm update:*)', 'Bash(npm audit:*)', 'Bash(npm outdated:*)', 'Bash(npm ls:*)',
+  'Bash(npx cap sync:*)', 'Bash(npx cap copy:*)', 'Bash(npx vite build:*)',
   'Bash(sleep:*)', 'Bash(zylot garder:*)', 'Bash(zylot commiter:*)', 'Bash(zylot pousser)', 'Bash(zylot deployer:*)', 'Bash(zylot etat)',
 ];
 const INTERDIT = ['Agent', 'Task', 'WebSearch', 'Bash(git push:*)', 'Bash(git remote:*)', 'Bash(git commit:*)', 'Bash(git checkout:*)', 'Bash(git reset:*)', 'Bash(rm:*)', 'NotebookEdit'];
