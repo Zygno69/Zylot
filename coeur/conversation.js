@@ -389,6 +389,14 @@ async function deployerVraiment(p, verifierApres, messageCommit, reponse) {
   if (!/^Rien à garder/.test(g.message)) avant = g.message + '\n';
   // Projet en CI/CD : la mise en ligne, c'est GitHub Actions, déclenché par l'envoi sur main.
   if (p.ci === 'github') {
+    // GitHub a déjà ce commit : l'envoi ne déclenchera rien, inutile d'attendre une nouvelle version sur le site.
+    const amont = await git(p.dossier, ['rev-parse', '@{u}']), tete = await git(p.dossier, ['rev-parse', 'HEAD']);
+    if (!avant && amont.ok && amont.out === tete.out) {
+      const cg = lireConv(p.id); cg.demandeProd = null; cg.fichiersADeployer = [];
+      systeme(cg, 'Rien de nouveau à mettre en ligne : GitHub a déjà la dernière version. Si elle n\'est pas sur le site, c\'est qu\'elle ne le concerne pas (appli iOS, fonctions Supabase…) ou qu\'elle a été envoyée sans mise en ligne.');
+      ecrireConv(p.id, cg);
+      return { ok: true, message: 'Rien de nouveau : GitHub avait déjà la dernière version, aucune mise en ligne n\'a été déclenchée.' };
+    }
     const pu = await pousserVraiment(p);
     if (pu.erreur) return pu;
     const cg = lireConv(p.id); cg.demandeProd = null; cg.questionProd = null; cg.fichiersADeployer = [];

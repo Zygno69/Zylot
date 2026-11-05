@@ -857,6 +857,18 @@ function texteClaude(t){
     .replace(/^#{1,4} (.+)$/gm,'<b>$1</b>');
 }
 function diffColore(d){ return d.split('\n').map(l=>{ const e=esc(l); return l.startsWith('+')&&!l.startsWith('+++')?`<span class="diff-add">${e}</span>`:l.startsWith('-')&&!l.startsWith('---')?`<span class="diff-del">${e}</span>`:l.startsWith('@@')?`<span class="diff-hunk">${e}</span>`:e; }).join('\n'); }
+// Claude finit son message par « Je le mets en ligne ? » : on affiche le bouton, plus besoin d'écrire « déploie ».
+const QUESTION_PROD = /(mets?|mettre|d[ée]ploie|d[ée]ployer|d[ée]ploiement|mise en (ligne|prod)|en ligne|en prod)(?:(?!\. )[^?!\n]){0,80}\?\s*$/i;
+const prodIgnoree = new Set();
+function proposeProd(c){
+  if(c.enCours || c.prodEnCours || c.demandeProd || c.questionProd || c.attenteEnLigne || !c.messages.length) return false;
+  const i = c.messages.length-1, m = c.messages[i];
+  if(m.role!=='claude' || m.erreur || prodIgnoree.has(projetOuvert+':'+i)) return false;
+  const textes = (m.blocs||[]).filter(b=>b.type!=='action').map(b=>b.t);
+  const t = (textes.length ? textes[textes.length-1] : (m.texte||'')).trim();
+  return QUESTION_PROD.test(t.slice(-200));
+}
+
 function rendreBlocs(m, vivant){
   const out = []; let actions = [];
   const vider = () => { if(!actions.length) return;
@@ -898,6 +910,9 @@ async function chargerConv(choisirVolet){
       return `<div class="modif"><b>Claude propose de mettre ${esc(pp?.nom||'')} en ligne</b>
       ${n?`<span style="font-size:12.5px" class="t-orange">Attention : ${n} fichier${n>1?'s':''} modifié${n>1?'s':''} et non commité${n>1?'s':''} de votre dossier partiront aussi.</span>`:''}
       <div class="row"><button type="button" class="btn small primary" data-conv-prod>Mettre en ligne</button><button type="button" class="btn small" data-conv-annulerprod>Non</button></div></div>`; })() : '')
+  + (proposeProd(c) ? `<div class="modif"><b>Claude propose la mise en ligne</b>
+      <span class="muted" style="font-size:12.5px">Il garde ses modifications, les envoie et vérifie le site ensuite.</span>
+      <div class="row"><button type="button" class="btn small primary" data-conv-prod>Mettre en ligne</button><button type="button" class="btn small" data-conv-pasprod="${c.messages.length-1}">Pas maintenant</button></div></div>` : '')
   + (c.modif && !c.enCours ? `<div class="modif">
       <b>Modifications prêtes dans la copie de Claude</b>
       <span style="font-size:12.5px">${esc(c.modif.resume)}</span>
@@ -1019,6 +1034,7 @@ document.addEventListener('click', async e=>{
     try{ await api('/api/conversation/'+projetOuvert+'/deployer',{}); toast('Mise en ligne lancée'); convVue=''; chargerConv(); setTimeout(()=>{ charger(); chargerDetail(); }, 3000); }catch(err){ toast(err.message); } return; }
   if(b.dataset.convRepondre){ if(b.dataset.convRepondre==='oui' && !await deuxClics(b,'Confirmer : continuer la mise en ligne')) return;
     try{ await api('/api/conversation/'+projetOuvert+'/repondreprod',{reponse:b.dataset.convRepondre}); convVue=''; chargerConv(); }catch(err){ toast(err.message); } return; }
+  if(b.dataset.convPasprod!==undefined){ prodIgnoree.add(projetOuvert+':'+b.dataset.convPasprod); convVue=''; chargerConv(); return; }
   if(b.dataset.convAnnulerprod!==undefined){ await api('/api/conversation/'+projetOuvert+'/annulerprod',{}).catch(()=>{}); convVue=''; chargerConv(); return; }
   if(b.dataset.convNouvelle!==undefined){ if(!await deuxClics(b,'Confirmer : tout effacer')) return;
     try{ await api('/api/conversation/'+projetOuvert+'/nouvelle',{}); convVue=''; chargerConv(); }catch(err){ toast(err.message); } return; }

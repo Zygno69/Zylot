@@ -30,7 +30,7 @@ conversation.surMiseEnLigneSuivie(p => {
     const c = conversation.etat(p.id);
     if (!c.attenteEnLigne) return;                          // arrivée : noterMiseEnLigne a fait le message
     if (Date.now() - debut > 8 * 60e3) {
-      conversation.signaler(p.id, 'Pas encore en ligne après 8 minutes. Regardez l\'onglet Actions du dépôt sur GitHub : la vérification ou l\'envoi a peut-être échoué.');
+      conversation.signaler(p.id, 'Pas encore en ligne après 8 minutes. Regardez l\'onglet Actions du dépôt sur GitHub : la vérification ou l\'envoi a peut-être échoué. Ou bien ces changements ne touchent pas le site (appli iOS, fonctions Supabase…) : GitHub ne met alors rien en ligne, c\'est normal.');
       return;
     }
     setTimeout(tic, 20e3);
