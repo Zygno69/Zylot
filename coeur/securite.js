@@ -52,15 +52,25 @@ function jetonsDangereux(texte) {
   return [...new Set(trouves)];
 }
 
+// Erreurs qui veulent vraiment dire « certificat ou HTTPS cassé » (le visiteur voit une alerte).
+const ERREURS_TLS = /CERT|SSL|TLS|SELF_SIGNED|UNABLE_TO_VERIFY|ALTNAME|EPROTO/i;
+
 async function obtenir(url, opts = {}) {
-  try {
-    const r = await fetch(url, { headers: { 'User-Agent': AGENT }, signal: AbortSignal.timeout(12000), ...opts });
-    const buf = Buffer.from(await r.arrayBuffer());
-    return { code: r.status, entetes: Object.fromEntries(r.headers), corps: buf.subarray(0, opts.taille || 20000).toString('latin1'), location: r.headers.get('location') };
-  } catch (e) {
-    const code = e.cause && e.cause.code;
-    return { erreur: require('./surveillance').ERREURS[code] || code || e.message };
+  // Jusqu'à 3 essais : un serveur mutualisé lent une fois n'est pas une panne.
+  let derniere = null;
+  for (let essai = 1; essai <= 3; essai++) {
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': AGENT }, signal: AbortSignal.timeout(20000), ...opts });
+      const buf = Buffer.from(await r.arrayBuffer());
+      return { code: r.status, entetes: Object.fromEntries(r.headers), corps: buf.subarray(0, opts.taille || 20000).toString('latin1'), location: r.headers.get('location') };
+    } catch (e) {
+      const code = (e.cause && e.cause.code) || (e.name === 'TimeoutError' ? 'TIMEOUT' : '');
+      derniere = { erreur: require('./surveillance').ERREURS[code] || code || e.message, codeErreur: code, tls: ERREURS_TLS.test(code + ' ' + ((e.cause && e.cause.message) || '')) };
+      if (derniere.tls) break;   // un certificat invalide ne s'arrange pas en réessayant
+      if (essai < 3) await new Promise(r => setTimeout(r, 5000));
+    }
   }
+  return derniere;
 }
 
 async function controler(p) {
@@ -76,8 +86,13 @@ async function controler(p) {
 
   // En-têtes de la page d'accueil
   const accueil = await obtenir(base + '/');
+  if (accueil.erreur && !accueil.tls) {
+    // Site lent ou injoignable pendant le contrôle (3 essais) : ce n'est pas un problème de sécurité, la surveillance
+    // s'occupe des pannes. On ne juge rien, et le tour garde le résultat précédent.
+    return { ...res, injoignable: true, erreur: accueil.erreur };
+  }
   if (accueil.erreur) {
-    // Sans page d'accueil, on ne peut rien juger d'autre : on le dit, sans compter de faux « en-têtes manquants ».
+    // Vraie erreur de certificat : sans page d'accueil, on ne juge rien d'autre (pas de faux « en-têtes manquants »).
     ajout('urgent', 'Le site ne s\'ouvre pas en HTTPS', `${base} : ${accueil.erreur}. Les visiteurs voient une alerte de sécurité.`, 40);
     res.exposes = []; res.entetes = null; res.fichiersTestes = 0;
     return res;
@@ -136,11 +151,18 @@ function note(controle, cert, alertesAudit = []) {
   return { score, lettre: score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : 'E' };
 }
 
+// Site injoignable au moment du contrôle : on garde le dernier résultat complet, en notant l'essai manqué.
+function garderSiInjoignable(r, avant) {
+  if (!r.injoignable) return r;
+  const base = avant && !avant.injoignable ? avant : { points: [], exposes: [], entetes: null, fichiersTestes: 0, quand: r.quand };
+  return { ...base, essaiManque: { quand: r.quand, erreur: r.erreur } };
+}
+
 async function tour(prevenir) {
   const tous = S.lire(F, {});
   for (const p of S.projets().filter(p => p.site)) {
     const avant = tous[p.id];
-    const r = await controler(p);
+    const r = garderSiInjoignable(await controler(p), avant);
     tous[p.id] = r;
     for (const x of r.secrets || []) {
       if (!avant || !(avant.secrets || []).some(y => y.ou === x.ou && y.quoi === x.quoi)) {
@@ -162,7 +184,7 @@ async function tour(prevenir) {
 async function unProjet(p) {
   if (!p.site) return null;
   const tous = S.lire(F, {});
-  tous[p.id] = await controler(p);
+  tous[p.id] = garderSiInjoignable(await controler(p), tous[p.id]);
   S.ecrire(F, tous);
   return tous[p.id];
 }

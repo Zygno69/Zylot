@@ -72,7 +72,7 @@ Règles :
 
 const LIMITE = /usage limit|rate limit|limit reached|hit your limit|quota|5-hour limit|weekly limit/i;
 
-function auditer(p, { modele = 'sonnet', delaiMax = 20 * 60 * 1000 } = {}) {
+function auditerUneFois(p, { modele = 'sonnet', delaiMax = 20 * 60 * 1000 } = {}) {
   return new Promise(resolve => {
     const debut = Date.now();
     const args = [
@@ -93,7 +93,7 @@ function auditer(p, { modele = 'sonnet', delaiMax = 20 * 60 * 1000 } = {}) {
     enfant.stdout.on('data', d => sortie += d);
     enfant.stderr.on('data', d => erreurs += d);
     const minuteur = setTimeout(() => enfant.kill('SIGTERM'), delaiMax);
-    enfant.on('error', e => { clearTimeout(minuteur); resolve({ ok: false, erreur: 'Claude Code introuvable : ' + e.message }); });
+    enfant.on('error', e => { clearTimeout(minuteur); resolve({ ok: false, introuvable: e.code === 'ENOENT', erreur: 'Claude Code introuvable : ' + e.message }); });
     enfant.on('close', code => {
       clearTimeout(minuteur);
       const duree = Math.round((Date.now() - debut) / 1000);
@@ -113,6 +113,18 @@ function auditer(p, { modele = 'sonnet', delaiMax = 20 * 60 * 1000 } = {}) {
     });
     enfant.stdin.end(consigne(p));
   });
+}
+
+// Claude Code se met à jour tout seul : pendant quelques instants la commande n'existe plus (audit du 02/11 : 6 projets
+// tombés dans ce trou). Dans ce cas, on attend et on réessaie, jusqu'à 3 fois.
+async function auditer(p, opts) {
+  let r;
+  for (let essai = 1; essai <= 3; essai++) {
+    r = await auditerUneFois(p, opts);
+    if (!r.introuvable) return r;
+    await new Promise(ok => setTimeout(ok, 2 * 60 * 1000));
+  }
+  return r;
 }
 
 module.exports = { auditer };
