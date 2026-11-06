@@ -102,6 +102,7 @@ async function etat() {
       version: surv && surv.etat ? surv.etat.version || null : null,
       usage: (u => u && { releve: u.releve, erreur: u.erreur, principaux: u.indicateurs.filter(x => x.principal).slice(0, 3), alertes: u.indicateurs.filter(x => x.alerte).map(x => ({ libelle: x.libelle, valeur: x.valeur, unite: x.unite, aide: x.aide })) })(p.stats ? usage.dernier(p.id) : null),
       modeProd: p.ci === 'github' ? 'github' : p.deploy ? 'script' : null,
+      aPublier: (await commitsAPublier(p, surv && surv.etat && surv.etat.version) || []).slice(0, 6).map(x => x.message.slice(0, 120)),
       aMettreEnLigne: await aMettreEnLigne(p, surv && surv.etat && surv.etat.version),
       conversation: (({ enCours, prodEnCours, modif, demandeProd, questionProd, attenteEnLigne, messages }) => ({
         enCours, prodEnCours, modif: !!modif, demande: !!(demandeProd || questionProd), attenteEnLigne: !!attenteEnLigne,
@@ -148,11 +149,22 @@ async function suggestionsProjet(p) {
 }
 
 // Combien de commits du projet ne sont pas encore sur le site (si on connaît la version en ligne).
-async function aMettreEnLigne(p, version) {
+// Seuls comptent les commits qui partiraient vraiment : ni « [skip ci] », ni hors des chemins surveillés par la CI
+// (ex. ALF ne met en ligne que public/ : un changement de l'appli iOS n'est pas « à publier »).
+async function commitsAPublier(p, version) {
   if (!version || !fs.existsSync(p.dossier)) return null;
-  return new Promise(res => require('child_process').execFile('git', ['-C', p.dossier, 'rev-list', '--count', version.sha + '..HEAD'], { timeout: 5000 },
-    (e, out) => res(e ? null : Number(out.trim()))));
+  let chemins = [];
+  if (p.ci === 'github') {
+    try {
+      const wf = fs.readFileSync(path.join(p.dossier, '.github/workflows/mise-en-ligne.yml'), 'utf8');
+      const m = wf.match(/^\s*push:[\s\S]*?^\s*paths:\s*\[([^\]]*)\]/m);
+      if (m) chemins = m[1].split(',').map(x => x.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean).map(x => ':(glob)' + x);
+    } catch {}
+  }
+  return new Promise(res => require('child_process').execFile('git', ['-C', p.dossier, 'log', '--format=%H%x1f%s', version.sha + '..HEAD', ...(chemins.length ? ['--', ...chemins] : [])], { timeout: 5000 },
+    (e, out) => res(e ? null : out.trim().split('\n').filter(Boolean).map(l => { const [sha, message] = l.split('\x1f'); return { sha, message }; }).filter(x => !/\[skip ci\]/i.test(x.message)))));
 }
+async function aMettreEnLigne(p, version) { const l = await commitsAPublier(p, version); return l && l.length; }
 
 // Le détail d'un projet pour sa page : circuit Mac → GitHub → site, derniers commits, historique des mises en ligne.
 async function detailProjet(p) {

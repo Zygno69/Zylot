@@ -159,6 +159,18 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
 .dpane{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px}
 .convpane{flex:1;display:flex;flex-direction:column;min-height:0}
 .messages{flex:1;overflow-y:auto;padding:18px 22px}
+.etatconv{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 22px;border-bottom:1px solid var(--line);font-size:13.5px}
+.etatconv:empty{display:none}
+.etatconv .pt{width:10px;height:10px;border-radius:50%;flex:none;background:var(--muted)}
+.etatconv.vert .pt{background:var(--vert,#1f9d55)} .etatconv.orange .pt{background:var(--orange,#d97706)} .etatconv.bleu .pt{background:var(--accent)}
+.etatconv.bleu .pt{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.etatconv .det{color:var(--muted);font-size:12.5px;width:100%;padding-left:20px}
+.jalon{align-self:center;display:flex;gap:8px;align-items:baseline;font-size:12.5px;line-height:1.45;padding:5px 12px;border-radius:10px;border:1px solid var(--line);color:var(--muted);width:fit-content;max-width:min(90%,720px);text-align:left}
+.jalon>span:nth-child(2){flex:1 1 auto;min-width:0}
+.jalon .hh{flex:none;white-space:nowrap}
+.jalon b{font-weight:600;color:var(--ink)} .jalon.ok{border-color:var(--vert,#1f9d55)} .jalon.ko{border-color:var(--orange,#d97706)}
+.jalon .hh{opacity:.7;font-size:11.5px}
 .conv{display:flex;flex-direction:column;gap:14px}
 .pieces{display:flex;gap:8px;flex-wrap:wrap}
 .piece{position:relative}
@@ -668,6 +680,7 @@ function fermer(){ $('#scrim').hidden=true; }
 
 // ---------- Navigation : vue d'ensemble ou page d'un site (#site-<id>) ----------
 let pointsACorriger = [];
+let convSig = '';
 let projetOuvert = null, pointsOuverts = [], suggestionsOuvertes = [], convTimer = null, convVue = '', volet = 'conv', detail = null;
 function aller(id, v){ if(v) volet = v; location.hash = id ? 'site-' + id : ''; if(!id) afficher(); }
 window.addEventListener('hashchange', afficher);
@@ -710,6 +723,7 @@ function construirePage(p){
     </header>
     <div class="pcorps">
       <div class="convpane" id="v-conv">
+        <div class="etatconv" id="etatConv"></div>
         <div class="messages" id="messages"><div class="conv" id="conv"></div></div>
         <div class="saisie">
           <div class="pieces" id="pieces" hidden></div>
@@ -871,6 +885,40 @@ function proposeProd(c){
   return QUESTION_PROD.test(t.slice(-200));
 }
 
+// Les messages de Zylot (gardé, envoyé, en ligne…) : des jalons lisibles d'un coup d'œil, avec l'heure.
+function evenement(m){
+  const t = m.texte||'', h = m.quand ? new Date(m.quand).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '';
+  const [ic, titre, cls] = /^En ligne/.test(t) ? ['✅','En ligne','ok']
+    : /échou|refus|Pas encore en ligne|annulée : |impossible/i.test(t) ? ['⚠️','Attention','ko']
+    : /^Envoyé sur GitHub|envoyée sur GitHub/.test(t) ? ['⬆️','Envoyé','']
+    : /^Mis en ligne/.test(t) ? ['✅','Mis en ligne','ok']
+    : /gard|intégr|^Commit/i.test(t) ? ['💾','Gardé dans le projet','ok']
+    : /jetées|annulée/i.test(t) ? ['✕','Annulé','']
+    : /^Rien de nouveau/.test(t) ? ['ℹ️','Rien à publier','']
+    : ['ℹ️','',''];
+  return `<div class="jalon ${cls}"><span>${ic}</span><span>${titre?`<b>${titre}</b> · `:''}${esc(t.replace(/^En ligne : /,''))}</span><span class="hh">${h}</span></div>`;
+}
+// Bandeau en haut de la conversation : où en est le projet, selon Zylot (pas selon ce que Claude raconte).
+function bandeauConv(c){
+  const pp = D?.projets.find(x=>x.id===projetOuvert) || {}, v = pp.version, n = pp.aMettreEnLigne, nc = pp.depot?.nonCommites||0;
+  const heure = d => new Date(d).toLocaleString('fr-FR',{weekday:'short',hour:'2-digit',minute:'2-digit'});
+  let cls='', txt='', det='', btn='';
+  if(c.enCours){ cls='bleu'; txt='Claude travaille…'; }
+  else if(c.prodEnCours){ cls='bleu'; txt='Mise en ligne en cours…'; }
+  else if(c.attenteEnLigne){ cls='bleu'; txt='Envoyé : mise en ligne par GitHub en cours (2 à 3 minutes)…'; }
+  else if(c.modif){ cls='orange'; txt='<b>Pas encore gardé</b> : les modifications sont dans la copie de Claude. Rien n\'a changé dans le projet ni sur le site.';
+    btn='<button type="button" class="btn small primary" data-conv-prod>Garder et mettre en ligne</button>'; }
+  else if(n>0){ cls='orange'; txt=`<b>Gardé, pas encore en ligne</b> : ${n} changement${n>1?'s':''} attend${n>1?'ent':''} la mise en ligne.`;
+    det = (pp.aPublier||[]).map(x=>'· '+esc(x)).join('<br>');
+    btn = pp.modeProd ? '<button type="button" class="btn small primary" data-conv-prod>Mettre en ligne</button>' : ''; }
+  else if(v && n===0){ cls='vert'; txt=`<b>Tout est en ligne</b> · version <span class="mono">${esc(v.sha.slice(0,7))}</span>, depuis ${heure(v.date)}`; }
+  else if(pp.site){ txt='Version en ligne inconnue pour l\'instant.'; }
+  if(nc && !c.enCours) det += (det?'<br>':'') + `${nc} fichier${nc>1?'s':''} modifié${nc>1?'s':''} dans votre dossier, hors conversation (non commité${nc>1?'s':''}).`;
+  const z = $('#etatConv'); if(!z) return;
+  z.className = 'etatconv ' + cls;
+  z.innerHTML = txt ? `<span class="pt"></span><span style="flex:1;min-width:0">${txt}</span>${btn}${det?`<span class="det">${det}</span>`:''}` : '';
+}
+
 function rendreBlocs(m, vivant){
   const out = []; let actions = [];
   const vider = () => { if(!actions.length) return;
@@ -892,7 +940,7 @@ async function chargerConv(choisirVolet){
   suggestionsOuvertes = c.suggestions || []; pointsACorriger = c.aCorriger || [];
   const aParle = c.messages.some(m=>m.role==='vous');
   const html = (c.messages.length ? c.messages.map((m,i)=>{
-    if(m.role==='systeme') return `<div class="msg systeme">${esc(m.texte)}</div>`;
+    if(m.role==='systeme') return evenement(m);
     if(m.role==='vous') return `<div class="msg vous">${(m.images||[]).map(n=>`<a href="/api/conversation/${esc(projetOuvert)}/image/${esc(n)}" target="_blank"><img class="capture" src="/api/conversation/${esc(projetOuvert)}/image/${esc(n)}" alt="Capture jointe"></a>`).join('')}${(m.fichiers||[]).length?`<div>${m.fichiers.map(n=>`<a class="pj" href="/api/conversation/${esc(projetOuvert)}/fichier/${esc(n)}">📎 ${esc(n.split('/').pop())}</a>`).join('')}</div>`:''}${esc(m.texte)}</div>`;
     if(m.role==='zylot') return `<div class="msg systeme">Zylot a transmis le compte rendu de la mise en ligne à Claude.</div>`;
     return `<div class="msg claude">${rendreBlocs(m, c.enCours && i===c.messages.length-1)}</div>`;
@@ -929,7 +977,13 @@ async function chargerConv(choisirVolet){
     if(enBas) defile.scrollTop = defile.scrollHeight;
   }
   const b = $('[data-conv-envoyer]'); if(b) b.disabled = c.enCours;
+  // Claude vient de finir, ou une mise en ligne avance : on relit l'état des projets pour le bandeau.
+  const sig = [c.enCours, c.prodEnCours, !!c.attenteEnLigne, !!c.modif, c.messages.length].join();
+  if(convSig && sig !== convSig) await charger().catch(()=>{});
+  convSig = sig;
+  bandeauConv(c);
   if(c.enCours || c.prodEnCours) convTimer = setTimeout(chargerConv, c.enCours ? 700 : 2000);
+  else if(c.attenteEnLigne) convTimer = setTimeout(async()=>{ await charger().catch(()=>{}); chargerConv(); }, 10000);
 }
 // Captures en attente d'envoi (collées, déposées ou choisies)
 let pieces = [];
