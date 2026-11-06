@@ -163,6 +163,8 @@ td .s{color:var(--muted);font-size:12px;margin-top:2px}
 .pieces{display:flex;gap:8px;flex-wrap:wrap}
 .piece{position:relative}
 .piece img{height:64px;max-width:120px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
+.piece .doc{display:flex;align-items:center;height:64px;max-width:180px;padding:0 12px;border-radius:8px;border:1px solid var(--line);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pj{display:inline-block;margin:0 6px 6px 0;padding:4px 10px;border-radius:8px;border:1px solid var(--line);font-size:12.5px;color:inherit;text-decoration:none}
 .piece button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);font-size:13px;line-height:20px;padding:0}
 .msg .capture{display:block;max-width:100%;max-height:260px;border-radius:8px;margin-bottom:6px}
 .convpane.depot .messages{outline:2px dashed var(--accent);outline-offset:-8px}
@@ -711,11 +713,11 @@ function construirePage(p){
         <div class="messages" id="messages"><div class="conv" id="conv"></div></div>
         <div class="saisie">
           <div class="pieces" id="pieces" hidden></div>
-          <textarea id="convTexte" rows="2" placeholder="Écrivez à Claude sur ${esc(p.nom)}… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne, Cmd+V pour coller une capture)"></textarea>
-          <input type="file" id="convFichier" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
+          <textarea id="convTexte" rows="2" placeholder="Écrivez à Claude sur ${esc(p.nom)}… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne, Cmd+V pour coller une capture, ou glissez des fichiers ici)"></textarea>
+          <input type="file" id="convFichier" multiple hidden>
           <div class="row" style="justify-content:space-between">
             <span class="muted" style="font-size:12px">Claude ne garde, ne pousse et ne met en ligne que si vous le lui demandez.</span>
-            <span class="row" style="gap:6px"><button type="button" class="btn small" data-conv-nouvelle>Nouvelle conversation</button><button type="button" class="btn small" data-conv-joindre>Joindre une capture</button><button type="button" class="btn small primary" data-conv-envoyer>Envoyer</button></span>
+            <span class="row" style="gap:6px"><button type="button" class="btn small" data-conv-nouvelle>Nouvelle conversation</button><button type="button" class="btn small" data-conv-joindre>Joindre un fichier</button><button type="button" class="btn small primary" data-conv-envoyer>Envoyer</button></span>
           </div>
         </div>
       </div>
@@ -891,7 +893,7 @@ async function chargerConv(choisirVolet){
   const aParle = c.messages.some(m=>m.role==='vous');
   const html = (c.messages.length ? c.messages.map((m,i)=>{
     if(m.role==='systeme') return `<div class="msg systeme">${esc(m.texte)}</div>`;
-    if(m.role==='vous') return `<div class="msg vous">${(m.images||[]).map(n=>`<a href="/api/conversation/${esc(projetOuvert)}/image/${esc(n)}" target="_blank"><img class="capture" src="/api/conversation/${esc(projetOuvert)}/image/${esc(n)}" alt="Capture jointe"></a>`).join('')}${esc(m.texte)}</div>`;
+    if(m.role==='vous') return `<div class="msg vous">${(m.images||[]).map(n=>`<a href="/api/conversation/${esc(projetOuvert)}/image/${esc(n)}" target="_blank"><img class="capture" src="/api/conversation/${esc(projetOuvert)}/image/${esc(n)}" alt="Capture jointe"></a>`).join('')}${(m.fichiers||[]).length?`<div>${m.fichiers.map(n=>`<a class="pj" href="/api/conversation/${esc(projetOuvert)}/fichier/${esc(n)}">📎 ${esc(n.split('/').pop())}</a>`).join('')}</div>`:''}${esc(m.texte)}</div>`;
     if(m.role==='zylot') return `<div class="msg systeme">Zylot a transmis le compte rendu de la mise en ligne à Claude.</div>`;
     return `<div class="msg claude">${rendreBlocs(m, c.enCours && i===c.messages.length-1)}</div>`;
   }).join('') : '') + (aParle ? '' : (c.suggestions?.length ? `<div class="suggestions"><b>Ce que je vous propose sur ce projet</b>${c.suggestions.slice(0,6).map((x,i)=>`
@@ -934,14 +936,14 @@ let pieces = [];
 function rendrePieces(){
   const z = $('#pieces'); if(!z) return;
   z.hidden = !pieces.length;
-  z.innerHTML = pieces.map((x,i)=>`<span class="piece"><img src="${x.url}" alt="Capture à joindre"><button type="button" data-retirer-piece="${i}" aria-label="Retirer">×</button></span>`).join('');
+  z.innerHTML = pieces.map((x,i)=>`<span class="piece">${x.image?`<img src="${x.url}" alt="Capture à joindre">`:`<span class="doc" title="${esc(x.fichier.name)}">📎 ${esc(x.fichier.name)}</span>`}<button type="button" data-retirer-piece="${i}" aria-label="Retirer">×</button></span>`).join('');
 }
 function ajouterFichiers(fichiers){
   for(const f of fichiers){
-    if(!/^image\/(png|jpeg|webp|gif)$/.test(f.type)){ toast('Seules les images sont acceptées'); continue; }
-    if(f.size > 10e6){ toast('Image trop lourde (10 Mo au plus)'); continue; }
-    if(pieces.length >= 6){ toast('6 captures au plus par message'); break; }
-    pieces.push({ fichier: f, url: URL.createObjectURL(f) });
+    const image = /^image\/(png|jpeg|webp|gif)$/.test(f.type);
+    if(f.size > (image?10e6:25e6)){ toast(`${f.name} : trop lourd (${image?10:25} Mo au plus)`); continue; }
+    if(pieces.length >= 10){ toast('10 pièces jointes au plus par message'); break; }
+    pieces.push({ fichier: f, image, url: image ? URL.createObjectURL(f) : '' });
   }
   rendrePieces();
 }
@@ -950,10 +952,13 @@ async function envoyerConv(){
   const t = $('#convTexte'), texte = t.value.trim();
   if(!texte && !pieces.length) return t.focus();
   try{
-    const images = [];
-    for(const x of pieces){ const r = await api('/api/conversation/'+projetOuvert+'/image',{type:x.fichier.type, donnees: await enBase64(x.fichier)}); images.push(r.nom); }
-    await api('/api/conversation/'+projetOuvert+'/message',{texte, images});
-    t.value=''; pieces.forEach(x=>URL.revokeObjectURL(x.url)); pieces=[]; rendrePieces();
+    const images = [], fichiers = [];
+    for(const x of pieces){
+      if(x.image){ const r = await api('/api/conversation/'+projetOuvert+'/image',{type:x.fichier.type, donnees: await enBase64(x.fichier)}); images.push(r.nom); }
+      else { const r = await api('/api/conversation/'+projetOuvert+'/fichier',{nom:x.fichier.name, donnees: await enBase64(x.fichier)}); fichiers.push(r.nom); }
+    }
+    await api('/api/conversation/'+projetOuvert+'/message',{texte, images, fichiers});
+    t.value=''; pieces.forEach(x=>x.url&&URL.revokeObjectURL(x.url)); pieces=[]; rendrePieces();
     convVue=''; await chargerConv(); $('#messages').scrollTop = $('#messages').scrollHeight;
   }catch(err){ toast(err.message); }
 }

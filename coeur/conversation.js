@@ -12,9 +12,11 @@ const CONV = path.join(S.DONNEES, 'conversations');
 const ATELIERS = path.join(S.DONNEES, 'ateliers');
 const OUTILS = path.join(S.RACINE, 'outils');
 const IMAGES = path.join(CONV, 'images');
+const PIECES = path.join(CONV, 'pieces');
 fs.mkdirSync(CONV, { recursive: true });
 fs.mkdirSync(ATELIERS, { recursive: true });
 fs.mkdirSync(IMAGES, { recursive: true });
+fs.mkdirSync(PIECES, { recursive: true });
 
 // Captures jointes à un message : rangées hors de la copie de travail (pour ne jamais finir dans un commit).
 const TYPES_IMAGE = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
@@ -31,6 +33,43 @@ function enregistrerImage(id, type, base64) {
 function cheminImage(id, nom) {
   if (!/^[a-z0-9]+\.(png|jpg|webp|gif)$/.test(nom)) return null;
   const f = path.join(IMAGES, id, nom);
+  return fs.existsSync(f) ? f : null;
+}
+
+// Pièces jointes (PDF, Word, tableur…) à déposer sur le site : rangées hors de la copie, sous un nom propre.
+// Claude les copie lui-même dans sa copie (cp autorisé depuis ce dossier seulement), à l'endroit voulu.
+const EXT_PIECES = /^(pdf|docx?|xlsx?|pptx?|odt|ods|odp|rtf|txt|csv|zip|png|jpe?g|webp|gif|svg|ico|mp3|mp4|m4a|webm|ics|json|xml|html?|css|js|woff2?|ttf|otf)$/;
+function nomPropre(nom) {
+  const s = String(nom || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^[-.]+|-+$/g, '');
+  return s.slice(-100) || 'fichier';
+}
+function enregistrerFichier(id, nom, base64) {
+  const propre = nomPropre(nom), ext = (propre.match(/\.([A-Za-z0-9]+)$/) || [])[1];
+  if (!ext || !EXT_PIECES.test(ext.toLowerCase())) return { erreur: `Format non pris en charge : ${nom}` };
+  const donnees = Buffer.from(String(base64 || ''), 'base64');
+  if (!donnees.length || donnees.length > 25e6) return { erreur: 'Fichier vide ou trop lourd (25 Mo au plus).' };
+  const lot = Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
+  const dossier = path.join(PIECES, id, lot); fs.mkdirSync(dossier, { recursive: true });
+  fs.writeFileSync(path.join(dossier, propre), donnees);
+  return { ok: true, nom: lot + '/' + propre };
+}
+// zylot copier : une pièce jointe ou une capture → la copie de travail de Claude (et nulle part ailleurs).
+function copierPiece(p, source, destination) {
+  const c = lireConv(p.id);
+  if (!c.atelier || !fs.existsSync(c.atelier.chemin)) return { erreur: 'Pas de copie de travail pour ce projet.' };
+  const src = path.resolve(String(source || ''));
+  const permis = [path.join(PIECES, p.id), path.join(IMAGES, p.id)].some(d => src.startsWith(d + path.sep));
+  if (!permis || !fs.existsSync(src) || !fs.statSync(src).isFile()) return { erreur: 'Source refusée : seules les pièces jointes et captures de cette conversation peuvent être copiées.' };
+  const racine = fs.realpathSync(c.atelier.chemin);
+  const dst = path.resolve(racine, String(destination || ''));
+  if (!dst.startsWith(racine + path.sep) || dst.split(path.sep).includes('.git') || dst.split(path.sep).includes('node_modules') || dst.split(path.sep).includes('vendor')) return { erreur: 'Destination refusée : un chemin dans ta copie de travail, hors .git, node_modules et vendor.' };
+  fs.mkdirSync(path.dirname(dst), { recursive: true });
+  fs.copyFileSync(src, dst);
+  return { ok: true, message: `Copié : ${path.relative(racine, dst)} (${fs.statSync(dst).size} octets). Pense à garder.` };
+}
+function cheminFichier(id, ref) {
+  if (!/^[a-z0-9]+\/[A-Za-z0-9._-]+$/.test(ref) || ref.includes('..')) return null;
+  const f = path.join(PIECES, id, ref);
   return fs.existsSync(f) ? f : null;
 }
 
@@ -52,7 +91,7 @@ const AUTORISE = [
   // Dépendances : node_modules est un lien vers celui du vrai projet, donc une installation le met à jour aussi.
   'Bash(npm install:*)', 'Bash(npm ci:*)', 'Bash(npm update:*)', 'Bash(npm audit:*)', 'Bash(npm outdated:*)', 'Bash(npm ls:*)',
   'Bash(npx cap sync:*)', 'Bash(npx cap copy:*)', 'Bash(npx vite build:*)',
-  'Bash(sed -n:*)', 'Bash(sleep:*)', 'Bash(zylot garder:*)', 'Bash(zylot commiter:*)', 'Bash(zylot pousser)', 'Bash(zylot deployer:*)', 'Bash(zylot etat)',
+  'Bash(sed -n:*)', 'Bash(sleep:*)', 'Bash(zylot garder:*)', 'Bash(zylot commiter:*)', 'Bash(zylot pousser)', 'Bash(zylot deployer:*)', 'Bash(zylot etat)', 'Bash(zylot copier:*)',
 ];
 const INTERDIT = ['Agent', 'Task', 'WebSearch', 'Bash(git push:*)', 'Bash(git remote:*)', 'Bash(git commit:*)', 'Bash(git checkout:*)', 'Bash(git reset:*)', 'Bash(rm:*)', 'NotebookEdit'];
 
@@ -146,7 +185,7 @@ function activite(outil, entree, racine) {
 
 const LIMITE = /usage limit|rate limit|limit reached|hit your limit|5-hour limit|weekly limit/i;
 
-async function envoyer(p, texte, contexte, { role = 'vous', images = [] } = {}) {
+async function envoyer(p, texte, contexte, { role = 'vous', images = [], fichiers = [] } = {}) {
   if (enCours.has(p.id)) return { erreur: 'Claude est déjà en train de répondre sur ce projet.' };
   const c = lireConv(p.id);
   const souci = await preparerAtelier(p, c);
@@ -161,7 +200,8 @@ async function envoyer(p, texte, contexte, { role = 'vous', images = [] } = {}) 
   }
   c.version = VERSION_CONSIGNES;
   images = images.filter(n => cheminImage(p.id, n)).slice(0, 6);
-  c.messages.push({ role, texte, images: images.length ? images : undefined, quand: new Date().toISOString() });
+  fichiers = fichiers.filter(n => cheminFichier(p.id, n)).slice(0, 10);
+  c.messages.push({ role, texte, images: images.length ? images : undefined, fichiers: fichiers.length ? fichiers : undefined, quand: new Date().toISOString() });
   const reponse = { role: 'claude', blocs: [], quand: new Date().toISOString() };
   c.messages.push(reponse);
   ecrireConv(p.id, c);
@@ -175,7 +215,7 @@ async function envoyer(p, texte, contexte, { role = 'vous', images = [] } = {}) 
     '--strict-mcp-config',
     '--append-system-prompt', consigneSysteme(p, contexte),
     // Le vrai dossier du projet est lisible (pour voir le travail en cours du propriétaire), mais Claude n'écrit que dans sa copie.
-    '--add-dir', p.dossier, '--add-dir', path.join(IMAGES, p.id),
+    '--add-dir', p.dossier, '--add-dir', path.join(IMAGES, p.id), '--add-dir', path.join(PIECES, p.id),
     '--allowedTools', [
       ...AUTORISE,
       ...['Edit', 'Write', 'MultiEdit'].map(o => `${o}(/${c.atelier.chemin}/**)`),
@@ -194,6 +234,8 @@ async function envoyer(p, texte, contexte, { role = 'vous', images = [] } = {}) 
   const enfant = spawn('claude', args, { cwd: c.atelier.chemin, env });
   if (role === 'zylot') texte = '[Message de Zylot, pas du propriétaire] ' + texte;
   if (images.length) texte += '\n\n[Capture' + (images.length > 1 ? 's' : '') + ' d\'écran jointe' + (images.length > 1 ? 's' : '') + ' par le propriétaire, à regarder avec l\'outil Read : ' + images.map(n => path.join(IMAGES, p.id, n)).join(', ') + ']';
+  if (fichiers.length) texte += '\n\n[Fichier' + (fichiers.length > 1 ? 's' : '') + ' joint' + (fichiers.length > 1 ? 's' : '') + ' par le propriétaire :\n' + fichiers.map(n => '- ' + path.join(PIECES, p.id, n)).join('\n') +
+    '\nS\'il faut les mettre sur le site, copie-les dans ta copie avec `zylot copier <chemin ci-dessus> <destination relative à ta copie, ex. public/docs/nom.pdf>` (les dossiers manquants sont créés), choisis un emplacement servi par le site (pour un site PHP, à côté des autres documents ; pour Vite, dans public/), ajoute les liens là où il faut, puis garde. Tu peux les lire avec Read (PDF compris).]';
   enCours.set(p.id, { enfant, jeton });
 
   // On garde au fil de l'eau le texte (mot à mot) et les actions, pour que l'interface les montre en direct.
@@ -542,4 +584,4 @@ function annulerProd(id) { const c = lireConv(id); if (c.demandeProd || c.questi
 
 function signaler(id, texte) { const c = lireConv(id); c.attenteEnLigne = null; systeme(c, texte); ecrireConv(id, c); }
 
-module.exports = { signaler, surMiseEnLigneSuivie, noterMiseEnLigne, enregistrerImage, cheminImage, etat, envoyer, garder, deployer, pousser, commiter, jeter, nouvelle, arreter, jetonValide, annulerProd, enCours };
+module.exports = { copierPiece, enregistrerFichier, cheminFichier, signaler, surMiseEnLigneSuivie, noterMiseEnLigne, enregistrerImage, cheminImage, etat, envoyer, garder, deployer, pousser, commiter, jeter, nouvelle, arreter, jetonValide, annulerProd, enCours };

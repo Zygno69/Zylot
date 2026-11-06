@@ -251,10 +251,17 @@ async function traiter(req, res) {
     const p = S.projets().find(x => x.id === md[1]);
     return p ? json(res, 200, await detailProjet(p)) : json(res, 404, { erreur: 'Projet inconnu' });
   }
-  const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter|nouvelle|deployer|annulerprod|repondreprod|image))?$/);
+  const mc = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)(?:\/(message|garder|jeter|arreter|nouvelle|deployer|annulerprod|repondreprod|image|fichier))?$/);
   const projetConv = mc && S.projets().find(p => p.id === mc[1]);
   if (mc && !projetConv) return json(res, 404, { erreur: 'Projet inconnu' });
   const mi = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)\/image\/([a-z0-9]+\.(png|jpg|webp|gif))$/);
+  const mf = url.pathname.match(/^\/api\/conversation\/([a-z0-9-]+)\/fichier\/([a-z0-9]+\/[A-Za-z0-9._-]+)$/);
+  if (mf && req.method === 'GET') {
+    const f = conversation.cheminFichier(mf[1], mf[2]);
+    if (!f) return json(res, 404, { erreur: 'Fichier introuvable' });
+    res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="' + path.basename(f) + '"', 'X-Content-Type-Options': 'nosniff' });
+    return fs.createReadStream(f).pipe(res);
+  }
   if (mi && req.method === 'GET') {
     const f = conversation.cheminImage(mi[1], mi[2]);
     if (!f) return json(res, 404, { erreur: 'Image introuvable' });
@@ -264,12 +271,13 @@ async function traiter(req, res) {
   if (mc && req.method === 'GET' && !mc[2]) return json(res, 200, { ...conversation.etat(projetConv.id), suggestions: await suggestionsProjet(projetConv), aCorriger: acorriger.ouverts(projetConv.id) });
 
   // Appels de la commande `zylot`, lancée par Claude pendant une conversation.
-  const ma = url.pathname.match(/^\/api\/agent\/([a-z0-9-]+)\/(garder|commiter|deployer|pousser|etat)$/);
+  const ma = url.pathname.match(/^\/api\/agent\/([a-z0-9-]+)\/(garder|commiter|deployer|pousser|etat|copier)$/);
   if (ma && req.method === 'POST') {
     const p = S.projets().find(x => x.id === ma[1]);
     if (!p || req.headers['x-zylot'] !== '1' || !conversation.jetonValide(p.id, req.headers['x-zylot-jeton'])) return json(res, 403, { erreur: 'Refusé : pas de conversation en cours pour ce projet.' });
     if (ma[2] === 'etat') return json(res, 200, { message: await contexteProjet(p) });
-    const { message, fichiers } = await corps(req);
+    const { message, fichiers, source, destination } = await corps(req);
+    if (ma[2] === 'copier') { const r = conversation.copierPiece(p, source, destination); return json(res, r.erreur ? 400 : 200, r); }
     if (ma[2] === 'commiter') return json(res, 200, await conversation.commiter(p, message, Array.isArray(fichiers) ? fichiers.map(String) : []));
     if (ma[2] === 'garder') return json(res, 200, await conversation.garder(p, message));
     if (ma[2] === 'pousser') return json(res, 200, await conversation.pousser(p));
@@ -295,15 +303,20 @@ async function traiter(req, res) {
       lancerAudit(ids);
       return json(res, 202, { ok: true });
     }
+    if (mc && mc[2] === 'fichier') {
+      const { nom, donnees } = await corps(req, 36e6);
+      const r = conversation.enregistrerFichier(projetConv.id, nom, donnees);
+      return json(res, r.erreur ? 400 : 200, r);
+    }
     if (mc && mc[2] === 'image') {
       const { type, donnees } = await corps(req, 15e6);
       const r = conversation.enregistrerImage(projetConv.id, type, donnees);
       return json(res, r.erreur ? 400 : 200, r);
     }
     if (mc && mc[2] === 'message') {
-      const { texte = '', images = [] } = await corps(req);
-      if (!String(texte).trim() && !images.length) return json(res, 400, { erreur: 'Message vide' });
-      const r = await conversation.envoyer(projetConv, String(texte).slice(0, 8000) || 'Regarde cette capture.', await contexteProjet(projetConv), { images: Array.isArray(images) ? images.map(String) : [] });
+      const { texte = '', images = [], fichiers = [] } = await corps(req);
+      if (!String(texte).trim() && !images.length && !fichiers.length) return json(res, 400, { erreur: 'Message vide' });
+      const r = await conversation.envoyer(projetConv, String(texte).slice(0, 8000) || (images.length ? 'Regarde cette capture.' : 'Voici des fichiers.'), await contexteProjet(projetConv), { images: Array.isArray(images) ? images.map(String) : [], fichiers: Array.isArray(fichiers) ? fichiers.map(String) : [] });
       return json(res, r.erreur ? 409 : 202, r);
     }
     if (mc && mc[2] === 'deployer') {
