@@ -68,7 +68,8 @@
       { "quoi": "Connexion : pause par adresse et par connexion", "fichier": "coeur/auth.php", "contient": ["echecs_verifier('compte', $email", "echecs_noter('compte', $email)"] },
       { "quoi": "Codes : 10 erreurs par jour au plus", "fichier": "coeur/auth.php", "contient": ["const CODE_ERREURS_JOUR = 10;", "code_bloque('reinit:'"] },
       { "quoi": "Back-office : pause par adresse et par connexion", "fichier": "coeur/operateur.php", "contient": ["echecs_verifier('operateur', $email", "code_bloque('op:'"] },
-      { "quoi": "Back-office : réservé à son adresse", "fichier": "coeur/operateur.php", "contient": ["plateforme_exiger_hote()"] }
+      { "quoi": "Back-office : réservé à son adresse", "fichier": "coeur/operateur.php", "contient": ["plateforme_exiger_hote()"] },
+      { "quoi": "Back-office : identifiant du navigateur avant la page", "fichier": "public/.htaccess", "contient": ["AuthUserFile /home/sc1brse4666/tactyko/private/.htpasswd", "Require valid-user"] }
     ]
   },
   "beausejour": {
