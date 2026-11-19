@@ -62,9 +62,12 @@
   "tactyko": {
     "gardes": [
       { "quoi": "Inscription : défi invisible, champ piège et délai", "fichier": "coeur/inscription.php", "contient": ["INSCRIPTION_DEFI_BITS", "defi_consommer(", "INSCRIPTION_DELAI_MIN"] },
-      { "quoi": "Inscription : limites et adresses jetables", "fichier": "coeur/inscription.php", "contient": ["limiter('inscription', 5, 3600)", "limiter_global('inscription'", "email_jetable($email)"] },
+      { "quoi": "Inscription : limites et adresses jetables", "fichier": "coeur/inscription.php", "contient": ["limiter('inscription', 5, 3600)", "'inscription:envois'", "email_jetable($email)", "code_bloque('inscription:"] },
       { "quoi": "Inscription : champ piège dans le formulaire", "fichier": "public/app/socle/porte.js", "contient": ["name: 'site_web'"] },
       { "quoi": "Connexion : limites et codes", "fichier": "coeur/auth.php", "contient": ["limiter('connexion', 30, 900)", "const CODE_ESSAIS_MAX = 5;", "appareils_oublier('compte_id'"] },
+      { "quoi": "Connexion : pause par adresse et par connexion", "fichier": "coeur/auth.php", "contient": ["echecs_verifier('compte', $email", "echecs_noter('compte', $email)"] },
+      { "quoi": "Codes : 10 erreurs par jour au plus", "fichier": "coeur/auth.php", "contient": ["const CODE_ERREURS_JOUR = 10;", "code_bloque('reinit:'"] },
+      { "quoi": "Back-office : pause par adresse et par connexion", "fichier": "coeur/operateur.php", "contient": ["echecs_verifier('operateur', $email", "code_bloque('op:'"] },
       { "quoi": "Back-office : réservé à son adresse", "fichier": "coeur/operateur.php", "contient": ["plateforme_exiger_hote()"] }
     ]
   },
