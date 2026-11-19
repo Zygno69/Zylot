@@ -6,5 +6,6 @@
   { "id": "duo",        "nom": "Duo",           "dossier": "~/DUO",           "site": "https://duo-app.net", "ci": "github", "stats": "https://gvxcgjlweoapbttiwnka.supabase.co/functions/v1/zylot-stats" },
   { "id": "lmo",        "nom": "LMO",           "dossier": "~/LMO",           "site": "https://inscription.lmo-lyon.com", "ci": "github" },
   { "id": "plan2",      "nom": "Plan2Sécurité", "dossier": "~/PLAN2SECURITE", "site": "https://www.plan2securite.fr", "ci": "github" },
-  { "id": "mir",        "nom": "Men In Red",    "dossier": "~/MIR/MIR",       "site": "https://men-in-red.fr", "ci": "github", "stats": "https://men-in-red.fr/zylot-stats.php" }
+  { "id": "mir",        "nom": "Men In Red",    "dossier": "~/MIR/MIR",       "site": "https://men-in-red.fr", "ci": "github", "stats": "https://men-in-red.fr/zylot-stats.php" },
+  { "id": "tactyko",    "nom": "Tactyko",       "dossier": "~/TACTYKO",       "site": "https://app.tactyko.com", "deploy": "bash deploy.sh {fichiers}", "note": "Plateforme multi-club (staff technique foot). Site vitrine : tactyko.com · back-office : admin.tactyko.com. Mise en ligne encore par deploy.sh (la CI ne fait que vérifier)." }
 ]
