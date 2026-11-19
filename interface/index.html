@@ -635,7 +635,10 @@ function carteSecurite(p){
         ${ligne(c.redirigeHttps, c.redirigeHttps ? 'http:// renvoie vers https://' : 'http:// ne renvoie pas vers https:// (le site reste joignable en clair)')}
         ${Object.entries(c.entetes).map(([k,v])=>ligne(v, esc(k))).join('')}
         ${c.points.filter(x=>x.titre.startsWith('Le serveur affiche')).map(x=>ligne(false, esc(x.detail))).join('')}
-      </ul>`;
+      </ul>
+      ${c.robots ? `<div class="label" style="margin:10px 0 6px">Protections anti-robots</div><ul class="checks">
+        ${c.robots.map(v=>v.nonVerifie ? `<li><span class="k muted">–</span><span title="${esc(v.detail)}">${esc(v.titre)} <span class="muted">(${esc(v.detail.replace(/^[^:]*: /,''))})</span></span></li>` : ligne(v.ok, v.ok ? esc(v.titre) : `<b>${esc(v.titre)}</b> : ${esc(v.detail)}`)).join('')}
+      </ul>` : `<div class="label" style="margin:10px 0 6px">Protections anti-robots</div><p class="muted" style="margin:0;font-size:13px">Pas encore décrites pour ce site (antirobot.json).</p>`}`;
     return `<article class="card">
       <div class="card-h"><div style="min-width:0"><h3>${esc(p.nom)}</h3><div class="url">${n?`${n.score} / 100`:'pas de note'}</div></div>
         <span class="grosse g-${n?n.lettre:'x'}">${n?n.lettre:'–'}</span></div>

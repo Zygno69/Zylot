@@ -1,6 +1,7 @@
 // Contrôles de sécurité vus de l'extérieur, sans Claude : fichiers qui ne devraient pas être publics, en-têtes, HTTPS.
 const path = require('path');
 const S = require('./stockage');
+const robots = require('./robots');
 
 const F = path.join(S.DONNEES, 'securite.json');
 const AGENT = 'Zylot-securite/1.0';
@@ -138,6 +139,12 @@ async function controler(p) {
   for (const x of res.secrets) {
     ajout('urgent', `Clé secrète visible en ligne : ${x.quoi}`, `Elle est lisible par n'importe qui dans ${x.ou} (code source de la page). La changer tout de suite chez le fournisseur (l'ancienne est compromise), puis la retirer du site : une clé secrète ne doit jamais être dans une page web, seulement côté serveur.`, 60);
   }
+
+  // Protections anti-robots (formulaires en ligne + code du dernier commit), voir coeur/robots.js.
+  try {
+    const ar = await robots.controler(p, base, obtenir);
+    if (ar) { res.robots = ar.verifs; res.points.push(...ar.points); }
+  } catch (e) { res.robots = [{ ok: true, nonVerifie: true, titre: 'Protections anti-robots', detail: 'Contrôle impossible cette fois : ' + e.message }]; }
   return res;
 }
 
@@ -168,6 +175,13 @@ async function tour(prevenir) {
       if (!avant || !(avant.secrets || []).some(y => y.ou === x.ou && y.quoi === x.quoi)) {
         S.journal(p.nom, `clé secrète visible en ligne : ${x.quoi}`, 'urgent');
         prevenir && prevenir(`Clé exposée sur ${p.nom}`, `${x.quoi} visible dans ${x.ou}`, true);
+      }
+    }
+    // Une protection anti-robots qui était en place et ne l'est plus : on prévient.
+    for (const v of (r.robots || []).filter(v => !v.ok)) {
+      if (!avant || !(avant.robots || []).some(y => y.titre === v.titre && !y.ok)) {
+        S.journal(p.nom, `protection anti-robots absente : ${v.titre}`, 'securite');
+        prevenir && prevenir(`Protection retirée sur ${p.nom}`, v.titre, false);
       }
     }
     for (const chemin of r.exposes) {

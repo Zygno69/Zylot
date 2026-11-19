@@ -1,0 +1,67 @@
+{
+  "_lisez-moi": "Protections anti-robots vérifiées chaque jour par coeur/robots.js. « formulaires » : page publique lue en ligne (champ piège, contrôle de délai). « gardes » : morceaux de code qui doivent rester dans le dernier commit (contient) ou ne pas revenir (absent).",
+
+  "mir": {
+    "gardes": [
+      { "quoi": "Connexion par code : essais limités", "fichier": "api-v2.php", "contient": ["login_code_attempts", "login_code_requests", "rateLimitExceeded('verify-code'"] },
+      { "quoi": "Connexion : pause par adresse et par connexion", "fichier": "api-v2.php", "contient": ["function loginThrottled(", "loginFailed($email, $p)"] },
+      { "quoi": "Mot de passe oublié : envois limités", "fichier": "api-v2.php", "contient": ["rateLimitExceeded('set-password-request'", "rateLimitExceeded('request-code'"] },
+      { "quoi": "Liens des emails sur l'adresse du site", "fichier": "api-v2.php", "contient": ["function mirHost()"], "absent": ["$_SERVER['HTTP_HOST'] ?? 'men-in-red.fr'", "$_SERVER['HTTP_HOST'] ?? 'localhost'"] }
+    ]
+  },
+  "duo": {
+    "gardes": [
+      { "quoi": "Notifications réservées au partenaire", "fichier": "supabase/functions/send-push/index.ts", "contient": ["couple.partner1_id !== callerId && couple.partner2_id !== callerId", "'unauthorized'"] }
+    ]
+  },
+  "lmo": {
+    "formulaires": [
+      { "quoi": "Formulaire de stage", "url": "/stage.php", "suivre": "stage\\.php\\?s=[a-z0-9-]+", "piege": "site_web", "absentNormal": "aucun stage ouvert" }
+    ],
+    "gardes": [
+      { "quoi": "Formulaire de stage : piège, délai et limite", "fichier": "stage.php", "contient": ["piege_declenche()", "formulaire_trop_rapide('stage')", "ip_actions('stage_demande'"] },
+      { "quoi": "Mot de passe oublié (parents) : envois limités", "fichier": "forgot.php", "contient": ["family_reset_try"] },
+      { "quoi": "Mot de passe oublié (direction) : envois limités", "fichier": "admin/forgot.php", "contient": ["admin_reset_try"] }
+    ]
+  },
+  "cascol": {
+    "gardes": [
+      { "quoi": "Limites par connexion (connexion, invitation, mot de passe)", "fichier": "public/api/index.php", "contient": ["limite_ip_depassee("] },
+      { "quoi": "Connexion : pause par adresse et par connexion", "fichier": "public/api/controllers/auth.php", "contient": ["limite_connexion_bloquee($email)", "limite_connexion_echec($email)"] },
+      { "quoi": "Codes de réinitialisation : 5 par jour", "fichier": "public/api/controllers/auth.php", "contient": ["action = 'reset_demande' AND created_at > DATE_SUB(NOW(), INTERVAL 1 DAY)"] },
+      { "quoi": "Messages qui ne révèlent pas les comptes", "fichier": "public/api/controllers/auth.php", "absent": ["Encore {$reste} tentative"] }
+    ]
+  },
+  "alf": {
+    "gardes": [
+      { "quoi": "Limites par connexion (connexion, codes)", "fichier": "public/api/index.php", "contient": ["limite_ip_depassee("] },
+      { "quoi": "Connexion : pause par adresse et par connexion", "fichier": "public/api/controllers/auth.php", "contient": ["limite_connexion_bloquee($email)", "limite_connexion_echec($email)"] },
+      { "quoi": "Messages qui ne révèlent pas les comptes", "fichier": "public/api/controllers/auth.php", "absent": ["Encore {$reste} tentative"] }
+    ]
+  },
+  "plan2": {
+    "formulaires": [
+      { "quoi": "Formulaire de devis", "url": "/contact", "piege": "site" }
+    ],
+    "gardes": [
+      { "quoi": "Devis : rythme, liens et délai", "fichier": "contact.php", "contient": ["antispam_rythme_depasse()", "antispam_contient_lien("] },
+      { "quoi": "Espace privé : essais limités", "fichier": "espace/connexion.php", "contient": ["antispam_compteur('espace'"] },
+      { "quoi": "Statistiques : clics limités", "fichier": "clic.php", "contient": ["antispam_compteur('clic'"] }
+    ]
+  },
+  "ligue": {
+    "formulaires": [
+      { "quoi": "Formulaire de contact", "url": "/contact.php", "piege": "site_web", "delai": "t" }
+    ],
+    "gardes": [
+      { "quoi": "Contact : délai et limite", "fichier": "contact.php", "contient": ["contact_signature(", "contact_trop_frequent()"] },
+      { "quoi": "Mot de passe oublié : envois limités", "fichier": "coeur/invitations.php", "contient": ["'oubli.demande'"] },
+      { "quoi": "Liens des emails sur l'adresse du site", "fichier": "coeur/invitations.php", "contient": ["conf('url') ?: 'https://aurahockey.fr'"] }
+    ]
+  },
+  "beausejour": {
+    "gardes": [
+      { "quoi": "Connexion : essais limités par connexion", "fichier": "coeur/auth.php", "contient": ["tentatives_connexion"] }
+    ]
+  }
+}
